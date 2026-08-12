@@ -12,7 +12,7 @@ struct {
 } rb SEC(".maps");
 
 // Helper function to check if the packet is TCP
-static bool is_tcp(struct ethhdr *eth, void *data_end)
+static bool is_tcp_udp(struct ethhdr *eth, void *data_end)
 {
     // Ensure Ethernet header is within bounds
     if ((void *)(eth + 1) > data_end)
@@ -29,7 +29,7 @@ static bool is_tcp(struct ethhdr *eth, void *data_end)
         return false;
 
     // Check if the protocol is TCP
-    if (ip->protocol != IPPROTO_TCP)
+    if (ip->protocol != IPPROTO_TCP && ip->protocol != IPPROTO_UDP)
         return false;
 
     return true;
@@ -46,7 +46,7 @@ int xdp_pass(struct xdp_md *ctx)
     struct ethhdr *eth = data;
 
     // Check if the packet is a TCP packet
-    if (!is_tcp(eth, data_end)) {
+    if (!is_tcp_udp(eth, data_end)) {
         return XDP_PASS;
     }
 
@@ -78,6 +78,9 @@ int xdp_pass(struct xdp_md *ctx)
         return XDP_PASS;
     }
 
+    __u32 src_ip = bpf_ntohl(ip->saddr);
+    uint16_t src_port = bpf_ntohs(tcp->source); 
+ 
     // Reserve a fixed-size event because bpf_ringbuf_reserve requires a constant size
     struct tcp_event *event = bpf_ringbuf_reserve(&rb, sizeof(*event), 0);
     if (!event) {
