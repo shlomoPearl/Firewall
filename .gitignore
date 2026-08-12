@@ -1,5 +1,6 @@
 .output/
-xdp-tcpdump
+xdp-wall
 *.o
 *.tmp
-
+test.py
+test.c
