@@ -1,0 +1,4 @@
+{
+    "ip_blacklist": ["190.190.190.190"],
+    "port_blacklist": ["9999"]
+}
