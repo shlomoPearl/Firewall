@@ -1,0 +1,102 @@
+#include "cJSON.c"
+
+#define RULES_FILE "rules.json"
+#define IP_LST_N "ip_blacklist"
+#define PORT_LST_N "port_blacklist"
+
+char* read_rules_file(const char* filename) {
+    FILE* file = fopen(filename, "r");
+    if (file == NULL) {
+        perror("Failed to open rules file");
+        return NULL;
+    }
+
+    fseek(file, 0, SEEK_END);
+    long length = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    char* content = malloc(length + 1);
+    if (content == NULL) {
+        perror("Failed to allocate memory for rules file content");
+        fclose(file);
+        return NULL;
+    }
+
+    fread(content, 1, length, file);
+    content[length] = '\0';
+    fclose(file);
+
+    return content;
+}
+
+cJSON* parse_rules(const char* rules_content) {
+    cJSON* rules_json = cJSON_Parse(rules_content);
+    if (rules_json == NULL) {
+        const char* error_ptr = cJSON_GetErrorPtr();
+        if (error_ptr != NULL) {
+            fprintf(stderr, "Error before: %s\n", error_ptr);
+        }
+        return NULL;
+    }
+    return rules_json;
+}
+
+cJSON* get_blacklist(cJSON* rules_json, const char* list_name) {
+    cJSON* blacklist = cJSON_GetObjectItemCaseSensitive(rules_json, list_name);
+    if (!cJSON_IsArray(blacklist)) {
+        fprintf(stderr, "%s is not an array\n", list_name);
+        return NULL;
+    }
+    return blacklist;
+}
+
+// void list_2_map()
+
+void free_rules_content(char* rules_content) {
+    if (rules_content != NULL) {
+        free(rules_content);
+    }
+}
+
+void free_blacklist(cJSON* blacklist) {
+    if (blacklist != NULL) {
+        cJSON_Delete(blacklist);
+    }
+}
+
+// main for testing purposes
+// int main() {
+//     char* rules_content = read_rules_file(RULES_FILE);
+//     if (rules_content == NULL) {
+//         return EXIT_FAILURE;
+//     }
+//     cJSON* rules_json = parse_rules(rules_content);
+//     if (rules_json == NULL) {
+//         free(rules_content);
+//         return EXIT_FAILURE;
+//     }   
+//     cJSON* ip_blacklist = get_blacklist(rules_json, IP_LST_N);
+//     cJSON* port_blacklist = get_blacklist(rules_json, PORT_LST_N);
+//     // Print the blacklists for testing
+//     if (ip_blacklist != NULL) {
+//         printf("IP Blacklist:\n");
+//         cJSON* ip = NULL;
+//         cJSON_ArrayForEach(ip, ip_blacklist) {
+//             if (cJSON_IsString(ip)) {
+//                 printf("%s\n", ip->valuestring);
+//             }
+//         }
+//     }
+//     if (port_blacklist != NULL) {   
+//         printf("Port Blacklist:\n");
+//         cJSON* port = NULL;
+//         cJSON_ArrayForEach(port, port_blacklist) {
+//             if (cJSON_IsString(port)) {
+//                 printf("%s\n", port->valuestring);
+//             }
+//         }
+//     }
+//     cJSON_Delete(rules_json);
+//     free(rules_content);
+//     return 0;
+// }
