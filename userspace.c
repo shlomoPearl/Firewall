@@ -10,73 +10,11 @@
 #include <bpf/bpf.h>
 
 #include "xdp-wall.skel.h"  // Generated skeleton header
-#include "xdp-tcp.h"
+
+#define MAX_TCP_HEADER_BYTES 60  // Maximum TCP header size in bytes
 
 // Callback function to handle events from the ring buffer
-static int handle_event(void *ctx, void *data, size_t data_sz)
-{
-    if (data_sz < sizeof(struct tcp_event)) {
-        fprintf(stderr, "Received incomplete TCP event\n");
-        return 0;
-    }
-
-    struct tcp_event *event = data;
-    if (event->header_len < 20 || event->header_len > MAX_TCP_HEADER_BYTES) {
-        fprintf(stderr, "Invalid TCP header length: %u\n", event->header_len);
-        return 0;
-    }
-
-    // Parse the raw TCP header bytes
-    struct tcphdr {
-        uint16_t source;
-        uint16_t dest;
-        uint32_t seq;
-        uint32_t ack_seq;
-        uint16_t res1:4,
-                 doff:4,
-                 fin:1,
-                 syn:1,
-                 rst:1,
-                 psh:1,
-                 ack:1,
-                 urg:1,
-                 ece:1,
-                 cwr:1;
-        uint16_t window;
-        uint16_t check;
-        uint16_t urg_ptr;
-        // Options and padding may follow
-    } __attribute__((packed));
-
-    struct tcphdr *tcp = (struct tcphdr *)event->header;
-
-    // Convert fields from network byte order to host byte order
-    uint16_t source_port = ntohs(tcp->source);
-    uint16_t dest_port = ntohs(tcp->dest);
-    uint32_t seq = ntohl(tcp->seq);
-    uint32_t ack_seq = ntohl(tcp->ack_seq);
-    uint16_t window = ntohs(tcp->window);
-
-    // Extract flags
-    uint8_t flags = 0;
-    flags |= (tcp->fin) ? 0x01 : 0x00;
-    flags |= (tcp->syn) ? 0x02 : 0x00;
-    flags |= (tcp->rst) ? 0x04 : 0x00;
-    flags |= (tcp->psh) ? 0x08 : 0x00;
-    flags |= (tcp->ack) ? 0x10 : 0x00;
-    flags |= (tcp->urg) ? 0x20 : 0x00;
-    flags |= (tcp->ece) ? 0x40 : 0x00;
-    flags |= (tcp->cwr) ? 0x80 : 0x00;
-
-    printf("Captured TCP Header:\n");
-    printf("  Source Port: %u\n", source_port);
-    printf("  Destination Port: %u\n", dest_port);
-    printf("  Sequence Number: %u\n", seq);
-    printf("  Acknowledgment Number: %u\n", ack_seq);
-    printf("  Data Offset: %u\n", tcp->doff);
-    printf("  Flags: 0x%02x\n", flags);
-    printf("  Window Size: %u\n", window);
-    printf("\n");
+static int handle_event(void *ctx, void *data, size_t data_sz){
 
     return 0;
 }
@@ -84,7 +22,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 int main(int argc, char **argv)
 {
     struct xdp_wall_bpf *skel;
-    struct ring_buffer *rb = NULL;
+    struct bpf_map *black_map = NULL;
     int ifindex;
     int err;
 
@@ -138,31 +76,18 @@ int main(int argc, char **argv)
     printf("Successfully attached XDP program to interface %s\n", ifname);
 
     /* Set up ring buffer polling */
-    rb = ring_buffer__new(bpf_map__fd(skel->maps.rb), handle_event, NULL, NULL);
-    if (!rb)
+    black_map = bpf_map__new(bpf_map__fd(skel->maps.black_map), handle_event, NULL, NULL);
+    if (!black_map)
     {
-        fprintf(stderr, "Failed to create ring buffer\n");
+        fprintf(stderr, "Failed to create map\n");
         err = -1;
         goto cleanup;
     }
 
-    printf("Start polling ring buffer\n");
-
-    /* Poll the ring buffer */
-    while (1)
-    {
-        err = ring_buffer__poll(rb, -1);
-        if (err == -EINTR)
-            continue;
-        if (err < 0)
-        {
-            fprintf(stderr, "Error polling ring buffer: %d\n", err);
-            break;
-        }
-    }
+    
 
 cleanup:
-    ring_buffer__free(rb);
+    bpf_map__free(black_map);
     xdp_wall_bpf__destroy(skel);
     return -err;
 }
