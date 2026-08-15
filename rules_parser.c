@@ -1,8 +1,5 @@
 #include "cJSON.c"
-
-#define RULES_FILE "rules.json"
-#define IP_LST_N "ip_blacklist"
-#define PORT_LST_N "port_blacklist"
+#include "config.h"
 
 char* read_rules_file(const char* filename) {
     FILE* file = fopen(filename, "r");
@@ -50,6 +47,19 @@ cJSON* get_blacklist(cJSON* rules_json, const char* list_name) {
     return blacklist;
 }
 
+cJSON* setup_json(const char* rules_file) {
+    char* rules_content = read_rules_file(rules_file);
+    if (rules_content == NULL) {
+        return NULL;
+    }
+
+    cJSON* rules_json = parse_rules(rules_content);
+    free(rules_content);  // Free the content after parsing
+    if (rules_json == NULL) {
+        return NULL;
+    }
+    return rules_json;
+}
 // void list_2_map()
 
 void free_rules_content(char* rules_content) {
@@ -80,21 +90,21 @@ void free_blacklist(cJSON* blacklist) {
 //     // Print the blacklists for testing
 //     if (ip_blacklist != NULL) {
 //         printf("IP Blacklist:\n");
-//         cJSON* ip = NULL;
-//         cJSON_ArrayForEach(ip, ip_blacklist) {
-//             if (cJSON_IsString(ip)) {
-//                 printf("%s\n", ip->valuestring);
-//             }
-//         }
+        // cJSON* ip = NULL;
+        // cJSON_ArrayForEach(ip, ip_blacklist) {
+        //     if (cJSON_IsString(ip)) {
+        //         printf("%s\n", ip->valuestring);
+        //     }
+        // }
 //     }
 //     if (port_blacklist != NULL) {   
 //         printf("Port Blacklist:\n");
-//         cJSON* port = NULL;
-//         cJSON_ArrayForEach(port, port_blacklist) {
-//             if (cJSON_IsString(port)) {
-//                 printf("%s\n", port->valuestring);
-//             }
-//         }
+        // cJSON* port = NULL;
+        // cJSON_ArrayForEach(port, port_blacklist) {
+        //     if (cJSON_IsString(port)) {
+        //         printf("%s\n", port->valuestring);
+        //     }
+        // }
 //     }
 //     cJSON_Delete(rules_json);
 //     free(rules_content);
