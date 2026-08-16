@@ -3,10 +3,10 @@ CC := gcc
 BPFTOOL := bpftool
 
 OUTPUT := .output
-BPF_OBJ := $(OUTPUT)/xdp-wall.bpf.o
-SKEL := $(OUTPUT)/xdp-wall.skel.h
-APP_OBJ := $(OUTPUT)/userspace.o
-APP := xdp-wall
+BPF_OBJ := $(OUTPUT)/firewall.bpf.o
+SKEL := $(OUTPUT)/firewall.skel.h
+APP_OBJ := $(OUTPUT)/firewall.o
+APP := firewall
 
 ARCH := $(shell uname -m)
 
@@ -34,14 +34,14 @@ $(OUTPUT):
 	mkdir -p $(OUTPUT)
 
 # Compile the eBPF program
-$(BPF_OBJ): xdp-wall.bpf.c xdp-tcp.h vmlinux.h | $(OUTPUT)
+$(BPF_OBJ): firewall.bpf.c vmlinux.h | $(OUTPUT)
 	@echo "  CLANG   $@"
 	$(CLANG) \
 		-g -O2 \
 		-target bpf \
 		-D__TARGET_ARCH_$(BPF_ARCH) \
 		-I. \
-		-c xdp-wall.bpf.c \
+		-c firewall.bpf.c \
 		-o $(BPF_OBJ)
 
 # Generate libbpf skeleton
@@ -50,11 +50,11 @@ $(SKEL): $(BPF_OBJ)
 	$(BPFTOOL) gen skeleton $(BPF_OBJ) > $(SKEL)
 
 # Compile userspace program
-$(APP_OBJ): userspace.c xdp-tcp.h $(SKEL) | $(OUTPUT)
+$(APP_OBJ): firewall.c cJSON.h cJSON.c config.h rules_parser.c rules_notify.c $(SKEL) | $(OUTPUT)
 	@echo "  GCC     $@"
 	$(CC) $(CFLAGS) \
 		-I$(OUTPUT) \
-		-c userspace.c \
+		-c firewall.c rules_parser.c rules_notify.c cJSON.c \
 		-o $(APP_OBJ)
 
 # Link userspace program
