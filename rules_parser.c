@@ -1,4 +1,5 @@
-#include "cJSON.c"
+#include <stdio.h>
+#include "cJSON.h"
 #include "config.h"
 
 char* read_rules_file(const char* filename) {
@@ -60,19 +61,7 @@ cJSON* setup_json(const char* rules_file) {
     }
     return rules_json;
 }
-// void list_2_map()
 
-void free_rules_content(char* rules_content) {
-    if (rules_content != NULL) {
-        free(rules_content);
-    }
-}
-
-void free_blacklist(cJSON* blacklist) {
-    if (blacklist != NULL) {
-        cJSON_Delete(blacklist);
-    }
-}
 
 // main for testing purposes
 // int main() {
