@@ -4,5 +4,4 @@ xdp-wall
 *.tmp
 test.py
 test.c
-cJSON*
 test
