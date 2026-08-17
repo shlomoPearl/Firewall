@@ -9,6 +9,9 @@
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
 #include "config.h"
+#include "cJSON.h"
+#include "rules_parser.h"
+#include "rules_notify.h"
 #include "firewall.skel.h"  // Generated skeleton header
 
 // Callback function to handle events from the BPF program (currently does nothing)

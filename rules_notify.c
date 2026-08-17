@@ -1,7 +1,4 @@
-#include <sys/inotify.h>
-#include <unistd.h>
-#include <stdio.h>
-#include "config.h"
+#include "rules_notify.h"
 
 int setup_inotify() {
     int inotify_fd = inotify_init1(IN_NONBLOCK | IN_MOVED_TO);

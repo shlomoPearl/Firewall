@@ -1,7 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include "cJSON.h"
-#include "config.h"
+#include "rules_parser.h"
 
 char* read_rules_file(const char* filename) {
     FILE* file = fopen(filename, "r");
