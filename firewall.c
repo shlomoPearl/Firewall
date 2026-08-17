@@ -176,7 +176,7 @@ int main(int argc, char **argv) {
 
 cleanup:
     cJSON_Delete(rules_json);
-    bpf_object__close(black_map);
-    xdp_wall_bpf__destroy(skel);
+    bpf_link__destroy(skel->links.xdp_pass);
+    firewall_bpf__destroy(skel);
     return -err;
 }
