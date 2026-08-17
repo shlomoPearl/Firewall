@@ -14,11 +14,6 @@
 #include "rules_notify.h"
 #include "firewall.skel.h"  // Generated skeleton header
 
-// Callback function to handle events from the BPF program (currently does nothing)
-static int handle_event(void *ctx, void *data, size_t data_sz){    
-    return 0;
-}
-
 int ip_list_2_map(cJSON* ip_list, struct bpf_map *black_map) {
     cJSON* ip = NULL;
     cJSON_ArrayForEach(ip, ip_list) {
