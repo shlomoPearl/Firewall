@@ -59,7 +59,7 @@ int port_list_2_map(cJSON* port_list, struct bpf_map *black_map) {
 }
 
 int main(int argc, char **argv) {
-    struct xdp_wall_bpf *skel;
+    struct firewall_bpf *skel;
     struct bpf_map *black_map = NULL;
     int ifindex;
     int err;
@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
     }
 
     /* Open and load BPF application */
-    skel = xdp_wall_bpf__open();
+    skel = firewall_bpf__open();
     if (!skel)
     {
         fprintf(stderr, "Failed to open BPF skeleton\n");
@@ -87,7 +87,7 @@ int main(int argc, char **argv) {
     }
 
     /* Load & verify BPF programs */
-    err = xdp_wall_bpf__load(skel);
+    err = firewall_bpf__load(skel);
     if (err)
     {
         fprintf(stderr, "Failed to load and verify BPF skeleton: %d\n", err);
@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
     }
 
     /* Attach XDP program */
-    err = xdp_wall_bpf__attach(skel);
+    err = firewall_bpf__attach(skel);
     if (err)
     {
         fprintf(stderr, "Failed to attach BPF skeleton: %d\n", err);
@@ -113,13 +113,21 @@ int main(int argc, char **argv) {
 
     printf("Successfully attached XDP program to interface %s\n", ifname);
 
-    black_map = bpf_map__new(bpf_map__fd(skel->maps.black_map), handle_event, NULL, NULL);
+    // initialize the black_map
+    black_map = bpf_object__find_map_by_name(skel->obj, "black_map");
     if (!black_map)
     {
-        fprintf(stderr, "Failed to create map\n");
+        fprintf(stderr, "Failed to find black_map\n");
         err = -1;
         goto cleanup;
     }
+    // black_map = bpf_map__new(bpf_map__fd(skel->maps.black_map), handle_event, NULL, NULL);
+    // if (!black_map)
+    // {
+    //     fprintf(stderr, "Failed to create map\n");
+    //     err = -1;
+    //     goto cleanup;
+    // }
 
     // first load the rules from the file
     cJSON* rules_json = setup_json(RULES_FILE);
@@ -168,7 +176,7 @@ int main(int argc, char **argv) {
 
 cleanup:
     cJSON_Delete(rules_json);
-    bpf_map__free(black_map);
+    bpf_object__close(black_map);
     xdp_wall_bpf__destroy(skel);
     return -err;
 }
