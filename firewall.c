@@ -11,7 +11,7 @@
 #include "config.h"
 #include "rules_parser.c"
 #include "rules_notify.c"
-#include "xdp-wall.skel.h"  // Generated skeleton header
+#include "firewall.skel.h"  // Generated skeleton header
 
 // Callback function to handle events from the BPF program (currently does nothing)
 static int handle_event(void *ctx, void *data, size_t data_sz){    
@@ -59,7 +59,7 @@ int port_list_2_map(cJSON* port_list, struct bpf_map *black_map) {
 }
 
 int main(int argc, char **argv) {
-    struct xdp_wall_bpf *skel;
+    struct firewall_bpf *skel;
     struct bpf_map *black_map = NULL;
     int ifindex;
     int err;
@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
     }
 
     /* Open and load BPF application */
-    skel = xdp_wall_bpf__open();
+    skel = firewall_bpf__open();
     if (!skel)
     {
         fprintf(stderr, "Failed to open BPF skeleton\n");
@@ -87,7 +87,7 @@ int main(int argc, char **argv) {
     }
 
     /* Load & verify BPF programs */
-    err = xdp_wall_bpf__load(skel);
+    err = firewall_bpf__load(skel);
     if (err)
     {
         fprintf(stderr, "Failed to load and verify BPF skeleton: %d\n", err);
@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
     }
 
     /* Attach XDP program */
-    err = xdp_wall_bpf__attach(skel);
+    err = firewall_bpf__attach(skel);
     if (err)
     {
         fprintf(stderr, "Failed to attach BPF skeleton: %d\n", err);
@@ -169,6 +169,6 @@ int main(int argc, char **argv) {
 cleanup:
     cJSON_Delete(rules_json);
     bpf_map__free(black_map);
-    xdp_wall_bpf__destroy(skel);
+    firewall_bpf__destroy(skel);
     return -err;
 }
