@@ -11,7 +11,7 @@
 #include "config.h"
 #include "rules_parser.c"
 #include "rules_notify.c"
-#include "xdp-wall.skel.h"  // Generated skeleton header
+#include "firewall.skel.h"  // Generated skeleton header
 
 // Callback function to handle events from the BPF program (currently does nothing)
 static int handle_event(void *ctx, void *data, size_t data_sz){    

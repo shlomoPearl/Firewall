@@ -1,5 +1,6 @@
 #include <sys/inotify.h>
 #include <unistd.h>
+#include <stdio.h>
 #include "config.h"
 
 int setup_inotify() {
