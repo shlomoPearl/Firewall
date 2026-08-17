@@ -113,13 +113,21 @@ int main(int argc, char **argv) {
 
     printf("Successfully attached XDP program to interface %s\n", ifname);
 
-    black_map = bpf_map__new(bpf_map__fd(skel->maps.black_map), handle_event, NULL, NULL);
+    // initialize the black_map
+    black_map = bpf_object__find_map_by_name(skel->obj, "black_map");
     if (!black_map)
     {
-        fprintf(stderr, "Failed to create map\n");
+        fprintf(stderr, "Failed to find black_map\n");
         err = -1;
         goto cleanup;
     }
+    // black_map = bpf_map__new(bpf_map__fd(skel->maps.black_map), handle_event, NULL, NULL);
+    // if (!black_map)
+    // {
+    //     fprintf(stderr, "Failed to create map\n");
+    //     err = -1;
+    //     goto cleanup;
+    // }
 
     // first load the rules from the file
     cJSON* rules_json = setup_json(RULES_FILE);
@@ -168,7 +176,7 @@ int main(int argc, char **argv) {
 
 cleanup:
     cJSON_Delete(rules_json);
-    bpf_map__free(black_map);
+    bpf_link__destroy(skel->links.xdp_pass);
     firewall_bpf__destroy(skel);
     return -err;
 }

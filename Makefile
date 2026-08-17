@@ -54,7 +54,7 @@ $(APP_OBJ): firewall.c cJSON.h cJSON.c config.h rules_parser.c rules_notify.c $(
 	@echo "  GCC     $@"
 	$(CC) $(CFLAGS) \
 		-I$(OUTPUT) \
-		-c firewall.c rules_parser.c rules_notify.c cJSON.c \
+		firewall.c rules_parser.c rules_notify.c cJSON.c \
 		-o $(APP_OBJ)
 
 # Link userspace program
