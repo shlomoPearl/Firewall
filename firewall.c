@@ -122,29 +122,25 @@ int main(int argc, char **argv) {
         err = -1;
         goto cleanup;
     }
-    // black_map = bpf_map__new(bpf_map__fd(skel->maps.black_map), handle_event, NULL, NULL);
-    // if (!black_map)
-    // {
-    //     fprintf(stderr, "Failed to create map\n");
-    //     err = -1;
-    //     goto cleanup;
-    // }
 
     // first load the rules from the file
     cJSON* rules_json = setup_json(RULES_FILE);
     if (rules_json == NULL) {
         fprintf(stderr, "Failed to set up JSON rules\n");
         err = -1;
+        cJSON_Delete(rules_json);
         goto cleanup;
     }
     if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), black_map) != 0) {
         fprintf(stderr, "Failed to populate black_map from JSON rules\n");
         err = -1;
+        cJSON_Delete(rules_json);
         goto cleanup;
     }
     if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), black_map) != 0) {
         fprintf(stderr, "Failed to populate black_map from JSON rules\n");
         err = -1;
+        cJSON_Delete(rules_json);
         goto cleanup;
     }
 
@@ -152,6 +148,7 @@ int main(int argc, char **argv) {
     if (inotify_fd < 0) {
         fprintf(stderr, "Failed to set up inotify\n");
         err = -1;
+        cJSON_Delete(rules_json);
         goto cleanup;
     }
 
@@ -176,7 +173,6 @@ int main(int argc, char **argv) {
     }
 
 cleanup:
-    cJSON_Delete(rules_json);
     bpf_link__destroy(skel->links.xdp_pass);
     firewall_bpf__destroy(skel);
     return -err;
