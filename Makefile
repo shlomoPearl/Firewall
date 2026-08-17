@@ -5,7 +5,10 @@ BPFTOOL := bpftool
 OUTPUT := .output
 BPF_OBJ := $(OUTPUT)/firewall.bpf.o
 SKEL := $(OUTPUT)/firewall.skel.h
-APP_OBJ := $(OUTPUT)/firewall.o
+FIREWALL_OBJ := $(OUTPUT)/firewall.o
+RULES_PARSER_OBJ := $(OUTPUT)/rules_parser.o
+RULES_NOTIFY_OBJ := $(OUTPUT)/rules_notify.o
+CJSON_OBJ := $(OUTPUT)/cJSON.o
 APP := firewall
 
 ARCH := $(shell uname -m)
@@ -22,14 +25,10 @@ endif
 
 CFLAGS := -O2 -g -Wall -fno-asynchronous-unwind-tables
 
-# libbpf headers
-BPF_INCLUDES := -I$(OUTPUT)
-
 .PHONY: all clean
 
 all: $(APP)
 
-# Create output directory
 $(OUTPUT):
 	mkdir -p $(OUTPUT)
 
@@ -49,19 +48,37 @@ $(SKEL): $(BPF_OBJ)
 	@echo "  SKEL    $@"
 	$(BPFTOOL) gen skeleton $(BPF_OBJ) > $(SKEL)
 
-# Compile userspace program
-$(APP_OBJ): firewall.c cJSON.h cJSON.c config.h rules_parser.c rules_notify.c $(SKEL) | $(OUTPUT)
+# Compile firwall.c program
+$(FIREWALL_OBJ): firewall.c cJSON.h cJSON.c config.h rules_parser.c rules_notify.c $(SKEL) | $(OUTPUT)
 	@echo "  GCC     $@"
 	$(CC) $(CFLAGS) \
 		-I$(OUTPUT) \
-		firewall.c rules_parser.c rules_notify.c cJSON.c \
-		-o $(APP_OBJ)
+		-c firewall.c\
+		-o $(FIREWALL_OBJ)
+$(RULES_PARSER_OBJ): rules_parser.c cJSON.h cJSON.c config.h | $(OUTPUT)
+	@echo "  GCC     $@"
+	$(CC) $(CFLAGS) \
+		-c rules_parser.c \
+		-o $(RULES_PARSER_OBJ)
+$(RULES_NOTIFY_OBJ): rules_notify.c config.h | $(OUTPUT)
+	@echo "  GCC     $@"
+	$(CC) $(CFLAGS) \
+		-c rules_notify.c \
+		-o $(RULES_NOTIFY_OBJ)
+$(CJSON_OBJ): cJSON.c cJSON.h | $(OUTPUT)
+	@echo "  GCC     $@"
+	$(CC) $(CFLAGS) \
+		-c cJSON.c \
+		-o $(CJSON_OBJ)
 
-# Link userspace program
-$(APP): $(APP_OBJ)
+# Link firewall program
+$(APP): $(FIREWALL_OBJ) $(RULES_PARSER_OBJ) $(RULES_NOTIFY_OBJ) $(CJSON_OBJ)
 	@echo "  LINK    $@"
 	$(CC) $(CFLAGS) \
-		$(APP_OBJ) \
+		$(FIREWALL_OBJ) \
+		$(RULES_PARSER_OBJ) \
+		$(RULES_NOTIFY_OBJ) \
+		$(CJSON_OBJ) \
 		-lbpf \
 		-lelf \
 		-lz \
@@ -70,4 +87,3 @@ $(APP): $(APP_OBJ)
 clean:
 	@echo "  CLEAN"
 	rm -rf $(OUTPUT) $(APP)
-
