@@ -1,5 +1,5 @@
 .output/
-xdp-wall
+firewall
 *.o
 *.tmp
 test.py
