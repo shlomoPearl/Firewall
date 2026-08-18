@@ -24,7 +24,7 @@ int ip_list_2_map(cJSON* ip_list, struct bpf_map *black_map) {
                 fprintf(stderr, "Invalid IP address: %s\n", ip_str);
                 continue;
             }
-            uint32_t ip_key = addr.s_addr; // Network byte order
+            uint32_t ip_key = ntohl(addr.s_addr); // host order as bpf 
             uint8_t value = 1; // Value to indicate blocked
             if (bpf_map_update_elem(bpf_map__fd(black_map), &ip_key, &value, BPF_ANY) != 0) {
                 fprintf(stderr, "Failed to update black_map for IP: %s\n", ip_str);
