@@ -9,14 +9,14 @@ struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 1024);
     __type(key, __u32);  // Key type: source IP address
-    __type(value, bool);  // Value type: boolean (1 for allowed, 0 for blocked)
+    __type(value, __u8);  
 } ip_blacklist  SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 1024);
     __type(key, __u16);  // Key type: source port
-    __type(value, bool);  // Value type: boolean (1 for allowed, 0 for blocked)
+    __type(value, __u8); 
 } port_blacklist  SEC(".maps");
 
 static bool is_tcp_udp(struct iphdr *ip){

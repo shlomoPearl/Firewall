@@ -25,7 +25,7 @@ int ip_list_2_map(cJSON* ip_list, struct bpf_map *black_map) {
                 continue;
             }
             uint32_t ip_key = addr.s_addr; // Network byte order
-            uint32_t value = 1; // Value to indicate blocked
+            uint8_t value = 1; // Value to indicate blocked
             if (bpf_map_update_elem(bpf_map__fd(black_map), &ip_key, &value, BPF_ANY) != 0) {
                 fprintf(stderr, "Failed to update black_map for IP: %s\n", ip_str);
             }
@@ -43,8 +43,8 @@ int port_list_2_map(cJSON* port_list, struct bpf_map *black_map) {
                 fprintf(stderr, "Invalid port number: %s\n", port_str);
                 continue;
             }
-            uint32_t port_key = (uint32_t)port_num; // Store as uint32_t for the map
-            uint32_t value = 1; // Value to indicate blocked
+            uint16_t port_key = (uint16_t)port_num; 
+            uint8_t value = 1; 
             if (bpf_map_update_elem(bpf_map__fd(black_map), &port_key, &value, BPF_ANY) != 0) {
                 fprintf(stderr, "Failed to update black_map for port: %s\n", port_str);
             }
