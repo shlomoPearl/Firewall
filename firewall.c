@@ -56,7 +56,8 @@ int port_list_2_map(cJSON* port_list, struct bpf_map *black_map) {
 
 int main(int argc, char **argv) {
     struct firewall_bpf *skel;
-    struct bpf_map *black_map = NULL;
+    struct bpf_map *ip_map = NULL;
+    struct bpf_map *port_map = NULL;
     int ifindex;
     int err;
 
@@ -110,10 +111,11 @@ int main(int argc, char **argv) {
     printf("Successfully attached XDP program to interface %s\n", ifname);
 
     // initialize the black_map
-    black_map = bpf_object__find_map_by_name(skel->obj, "black_map");
-    if (!black_map)
+    ip_map = bpf_object__find_map_by_name(skel->obj, "ip_blacklist");
+    port_map = bpf_object__find_map_by_name(skel->obj, "port_blacklist");
+    if (!ip_map || !port_map)
     {
-        fprintf(stderr, "Failed to find black_map\n");
+        fprintf(stderr, "Failed to find ip/port_map\n");
         err = -1;
         goto cleanup;
     }
@@ -126,14 +128,14 @@ int main(int argc, char **argv) {
         cJSON_Delete(rules_json);
         goto cleanup;
     }
-    if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), black_map) != 0) {
-        fprintf(stderr, "Failed to populate black_map from JSON rules\n");
+    if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), ip_map) != 0) {
+        fprintf(stderr, "Failed to populate ip_map from JSON rules\n");
         err = -1;
         cJSON_Delete(rules_json);
         goto cleanup;
     }
-    if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), black_map) != 0) {
-        fprintf(stderr, "Failed to populate black_map from JSON rules\n");
+    if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), port_map) != 0) {
+        fprintf(stderr, "Failed to populate port_map from JSON rules\n");
         err = -1;
         cJSON_Delete(rules_json);
         goto cleanup;
@@ -156,12 +158,12 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "Failed to set up JSON rules\n");
                 continue; 
             }
-            if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), black_map) != 0) {
-                fprintf(stderr, "Failed to populate black_map from JSON rules\n");
+            if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), ip_map) != 0) {
+                fprintf(stderr, "Failed to populate ip_map from JSON rules\n");
                 continue;
             }
-            if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), black_map) != 0) {
-                fprintf(stderr, "Failed to populate black_map from JSON rules\n");
+            if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), port_map) != 0) {
+                fprintf(stderr, "Failed to populate port_map from JSON rules\n");
                 continue;
             }   
         }
