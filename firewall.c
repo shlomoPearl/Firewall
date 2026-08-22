@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <net/if.h>
 #include <arpa/inet.h>
-
+#include <signal.h>
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
 #include "config.h"
@@ -13,6 +13,14 @@
 #include "rules_parser.h"
 #include "rules_notify.h"
 #include "firewall.skel.h"  // Generated skeleton header
+
+int running = 1;
+
+void handle_signal(int sig) {
+    printf("Received signal %d, exiting...\n", sig);
+    running = 0;
+}
+
 
 int ip_list_2_map(cJSON* ip_list, struct bpf_map *black_map) {
     cJSON* ip = NULL;
@@ -55,6 +63,8 @@ int port_list_2_map(cJSON* port_list, struct bpf_map *black_map) {
 }
 
 int main(int argc, char **argv) {
+    signal(SIGINT, handle_signal);
+    signal(SIGTERM, handle_signal);
     struct firewall_bpf *skel;
     struct bpf_map *black_map = NULL;
     int ifindex;
@@ -147,7 +157,7 @@ int main(int argc, char **argv) {
         goto cleanup;
     }
 
-    while (1) {
+    while (running) {
         int reload_needed = watch_rules_changes(inotify_fd);
         if (reload_needed) {
             printf("Reloading rules...\n");
@@ -163,12 +173,13 @@ int main(int argc, char **argv) {
             if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), black_map) != 0) {
                 fprintf(stderr, "Failed to populate black_map from JSON rules\n");
                 continue;
-            }   
+            }
+            cJSON_Delete(rules_json);
         }
     }
 
-cleanup:
-    bpf_link__destroy(skel->links.xdp_pass);
-    firewall_bpf__destroy(skel);
-    return -err;
+    cleanup:
+        bpf_link__destroy(skel->links.xdp_pass);
+        firewall_bpf__destroy(skel);
+        return -err;
 }
