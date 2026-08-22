@@ -9,14 +9,14 @@ struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 1024);
     __type(key, __u32);  // Key type: source IP address
-    __type(value, bool);  // Value type: boolean (1 for allowed, 0 for blocked)
+    __type(value, __u8);  
 } ip_blacklist  SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 1024);
     __type(key, __u16);  // Key type: source port
-    __type(value, bool);  // Value type: boolean (1 for allowed, 0 for blocked)
+    __type(value, __u8); 
 } port_blacklist  SEC(".maps");
 
 static bool is_tcp_udp(struct iphdr *ip){
@@ -64,6 +64,7 @@ int xdp_pass(struct xdp_md *ctx)
     
     __u32 src_ip = bpf_ntohl(ip->saddr);
     __u16 src_port;
+    __u16 dst_port;
     if (ip->protocol == IPPROTO_TCP) {
         struct tcphdr *tcp = (struct tcphdr *)((unsigned char *)ip + ip_hdr_len);
         if ((void *)(tcp + 1) > data_end) {
@@ -75,6 +76,7 @@ int xdp_pass(struct xdp_md *ctx)
         }
 
         src_port = bpf_ntohs(tcp->source); 
+        dst_port = bpf_ntohs(tcp->dest);
     }
     else if (ip->protocol == IPPROTO_UDP) {
         struct udphdr *udp = (struct udphdr *)((unsigned char *)ip + ip_hdr_len);
@@ -82,13 +84,15 @@ int xdp_pass(struct xdp_md *ctx)
             return XDP_PASS;
         }
         src_port = bpf_ntohs(udp->source);
+        dst_port = bpf_ntohs(udp->dest);
     } else {
         return XDP_PASS;
     }
     
-    bool *ip_rule = bpf_map_lookup_elem(&ip_blacklist, &src_ip);
-    bool *port_rule = bpf_map_lookup_elem(&port_blacklist, &src_port);
-    if ((ip_rule && *ip_rule) || (port_rule && *port_rule)) {
+    __u8 *ip_rule = bpf_map_lookup_elem(&ip_blacklist, &src_ip);
+    __u8 *src_port_rule = bpf_map_lookup_elem(&port_blacklist, &src_port);
+    __u8 *dst_port_rule = bpf_map_lookup_elem(&port_blacklist, &dst_port);
+    if ((ip_rule && *ip_rule) || (src_port_rule && *src_port_rule) || (dst_port_rule && *dst_port_rule)) {
         return XDP_DROP;
     }
     return XDP_PASS;

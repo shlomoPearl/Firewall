@@ -32,8 +32,8 @@ int ip_list_2_map(cJSON* ip_list, struct bpf_map *black_map) {
                 fprintf(stderr, "Invalid IP address: %s\n", ip_str);
                 continue;
             }
-            uint32_t ip_key = addr.s_addr; // Network byte order
-            uint32_t value = 1; // Value to indicate blocked
+            uint32_t ip_key = ntohl(addr.s_addr); // host order as bpf 
+            uint8_t value = 1; // Value to indicate blocked
             if (bpf_map_update_elem(bpf_map__fd(black_map), &ip_key, &value, BPF_ANY) != 0) {
                 fprintf(stderr, "Failed to update black_map for IP: %s\n", ip_str);
             }
@@ -51,8 +51,8 @@ int port_list_2_map(cJSON* port_list, struct bpf_map *black_map) {
                 fprintf(stderr, "Invalid port number: %s\n", port_str);
                 continue;
             }
-            uint32_t port_key = (uint32_t)port_num; // Store as uint32_t for the map
-            uint32_t value = 1; // Value to indicate blocked
+            uint16_t port_key = (uint16_t)port_num; 
+            uint8_t value = 1; 
             if (bpf_map_update_elem(bpf_map__fd(black_map), &port_key, &value, BPF_ANY) != 0) {
                 fprintf(stderr, "Failed to update black_map for port: %s\n", port_str);
             }
@@ -66,7 +66,8 @@ int main(int argc, char **argv) {
     signal(SIGINT, handle_signal);
     signal(SIGTERM, handle_signal);
     struct firewall_bpf *skel;
-    struct bpf_map *black_map = NULL;
+    struct bpf_map *ip_map = NULL;
+    struct bpf_map *port_map = NULL;
     int ifindex;
     int err;
 
@@ -120,10 +121,11 @@ int main(int argc, char **argv) {
     printf("Successfully attached XDP program to interface %s\n", ifname);
 
     // initialize the black_map
-    black_map = bpf_object__find_map_by_name(skel->obj, "black_map");
-    if (!black_map)
+    ip_map = bpf_object__find_map_by_name(skel->obj, "ip_blacklist");
+    port_map = bpf_object__find_map_by_name(skel->obj, "port_blacklist");
+    if (!ip_map || !port_map)
     {
-        fprintf(stderr, "Failed to find black_map\n");
+        fprintf(stderr, "Failed to find ip/port_map\n");
         err = -1;
         goto cleanup;
     }
@@ -136,14 +138,14 @@ int main(int argc, char **argv) {
         cJSON_Delete(rules_json);
         goto cleanup;
     }
-    if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), black_map) != 0) {
-        fprintf(stderr, "Failed to populate black_map from JSON rules\n");
+    if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), ip_map) != 0) {
+        fprintf(stderr, "Failed to populate ip_map from JSON rules\n");
         err = -1;
         cJSON_Delete(rules_json);
         goto cleanup;
     }
-    if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), black_map) != 0) {
-        fprintf(stderr, "Failed to populate black_map from JSON rules\n");
+    if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), port_map) != 0) {
+        fprintf(stderr, "Failed to populate port_map from JSON rules\n");
         err = -1;
         cJSON_Delete(rules_json);
         goto cleanup;
@@ -166,12 +168,12 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "Failed to set up JSON rules\n");
                 continue; 
             }
-            if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), black_map) != 0) {
-                fprintf(stderr, "Failed to populate black_map from JSON rules\n");
+            if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), ip_map) != 0) {
+                fprintf(stderr, "Failed to populate ip_map from JSON rules\n");
                 continue;
             }
-            if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), black_map) != 0) {
-                fprintf(stderr, "Failed to populate black_map from JSON rules\n");
+            if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), port_map) != 0) {
+                fprintf(stderr, "Failed to populate port_map from JSON rules\n");
                 continue;
             }
             cJSON_Delete(rules_json);
