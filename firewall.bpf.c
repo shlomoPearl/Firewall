@@ -46,6 +46,10 @@ int xdp_pass(struct xdp_md *ctx)
     if ((void *)(ip + 1) > data_end){
         return XDP_PASS;
     }
+    // Drop fragmented packets to prevent ip fragmentation attacks, as we cannot inspect the full packet
+    if (ip->frag_off & bpf_htons(0x3FFF)) { 
+        return XDP_DROP;
+    }
 
     if (!is_tcp_udp(ip)) {
         return XDP_PASS;
