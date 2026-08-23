@@ -1,7 +1,7 @@
 #include "rules_notify.h"
 
 int setup_inotify() {
-    int inotify_fd = inotify_init1(IN_NONBLOCK | IN_MOVED_TO);
+    int inotify_fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
     if (inotify_fd < 0) {
         perror("inotify_init");
         return -1;

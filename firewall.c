@@ -47,7 +47,7 @@ int port_list_2_map(cJSON* port_list, struct bpf_map *black_map) {
         if (cJSON_IsString(port)) {
             const char* port_str = port->valuestring;
             uint16_t port_num = (uint16_t)atoi(port_str);
-            if (port_num == 0) {
+            if (port_num < 1 || port_num > 65535) {
                 fprintf(stderr, "Invalid port number: %s\n", port_str);
                 continue;
             }

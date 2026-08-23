@@ -9,6 +9,11 @@ char* read_rules_file(const char* filename) {
 
     fseek(file, 0, SEEK_END);
     long length = ftell(file);
+    if (length < 0) {
+        perror("Failed to determine rules file length");
+        fclose(file);
+        return NULL;
+    }
     fseek(file, 0, SEEK_SET);
 
     char* content = malloc(length + 1);
