@@ -91,23 +91,9 @@ UNITY_SRC = unity.c
 TEST_PARSER = test_parser_runner
 TEST_INOTIFY = test_inotify_runner
 
-$(TEST_PARSER): test_parser.o rules_parser.o lib/cJSON.o $(UNITY_SRC:.c=.o) 
-	$(CC) $(CFLAGS) \
-		test_parser.o \
-		rules_parser.o \
-		lib/cJSON.o \
-		unity.o \
-		-o $(TEST_PARSER)
-
-$(TEST_INOTIFY): test_inotify.o rules_notify.o $(UNITY_SRC:.c=.o)
-	$(CC) $(CFLAGS) \
-		test_inotify.o \
-		rules_notify.o \
-		unity.o \
-		-o $(TEST_INOTIFY)
-
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+run_all_tests: $(TEST_PARSER) $(TEST_INOTIFY)
+	./$(TEST_PARSER)
+	./$(TEST_INOTIFY)
 
 run_parser_test: $(TEST_PARSER)
 	./$(TEST_PARSER)
@@ -115,12 +101,24 @@ run_parser_test: $(TEST_PARSER)
 run_inotify_test: $(TEST_INOTIFY)
 	./$(TEST_INOTIFY)
 
-run_all_tests: $(TEST_PARSER) $(TEST_INOTIFY)
-	./$(TEST_PARSER)
-	./$(TEST_INOTIFY)
+
+$(TEST_PARSER): tests/test_parser.o rules_parser.o lib/cJSON.o lib/unity.o 
+	$(CC) $(CFLAGS) $^ -o $@
+
+$(TEST_INOTIFY): tests/test_inotify.o rules_notify.o lib/unity.o
+	$(CC) $(CFLAGS) $^ -o $@
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+tests/%.o: tests/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+lib/%.o: lib/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean_tests:
-	rm -f $(TEST_PARSER) $(TEST_INOTIFY) *.o
+	rm -f $(TEST_PARSER) $(TEST_INOTIFY) *.o lib/*.o tests/*.o
 
 clean:
 	@echo "  CLEAN"
