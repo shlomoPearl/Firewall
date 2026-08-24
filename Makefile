@@ -1,5 +1,6 @@
 CLANG := clang
 CC := gcc
+CFLAGS := -O2 -g -Wall -fno-asynchronous-unwind-tables
 BPFTOOL := bpftool
 
 OUTPUT := .output
@@ -10,7 +11,6 @@ RULES_PARSER_OBJ := $(OUTPUT)/rules_parser.o
 RULES_NOTIFY_OBJ := $(OUTPUT)/rules_notify.o
 CJSON_OBJ := $(OUTPUT)/cJSON.o
 APP := firewall
-
 ARCH := $(shell uname -m)
 
 ifeq ($(ARCH),x86_64)
@@ -23,11 +23,10 @@ else
 	$(error Unsupported architecture: $(ARCH))
 endif
 
-CFLAGS := -O2 -g -Wall -fno-asynchronous-unwind-tables
 
-.PHONY: all clean
 
 all: $(APP)
+
 
 $(OUTPUT):
 	mkdir -p $(OUTPUT)
@@ -84,6 +83,47 @@ $(APP): $(FIREWALL_OBJ) $(RULES_PARSER_OBJ) $(RULES_NOTIFY_OBJ) $(CJSON_OBJ)
 		-lz \
 		-o $(APP)
 
+test_all: $(TEST_PARSER) $(TEST_INOTIFY)
+	./$(TEST_PARSER)
+	./$(TEST_INOTIFY)
+
+UNITY_SRC = unity.c
+TEST_PARSER = test_parser_runner
+TEST_INOTIFY = test_inotify_runner
+
+$(TEST_PARSER): test_parser.o rules_parser.o lib/cJSON.o $(UNITY_SRC:.c=.o) 
+	$(CC) $(CFLAGS) \
+		test_parser.o \
+		rules_parser.o \
+		lib/cJSON.o \
+		unity.o \
+		-o $(TEST_PARSER)
+
+$(TEST_INOTIFY): test_inotify.o rules_notify.o $(UNITY_SRC:.c=.o)
+	$(CC) $(CFLAGS) \
+		test_inotify.o \
+		rules_notify.o \
+		unity.o \
+		-o $(TEST_INOTIFY)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+run_parser_test: $(TEST_PARSER)
+	./$(TEST_PARSER)
+
+run_inotify_test: $(TEST_INOTIFY)
+	./$(TEST_INOTIFY)
+
+run_all_tests: $(TEST_PARSER) $(TEST_INOTIFY)
+	./$(TEST_PARSER)
+	./$(TEST_INOTIFY)
+
+clean_tests:
+	rm -f $(TEST_PARSER) $(TEST_INOTIFY) *.o
+
 clean:
 	@echo "  CLEAN"
 	rm -rf $(OUTPUT) $(APP)
+
+.PHONY: all clean clean_tests run_parser_test run_inotify_test run_all_tests
