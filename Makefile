@@ -49,13 +49,13 @@ $(SKEL): $(BPF_OBJ)
 	$(BPFTOOL) gen skeleton $(BPF_OBJ) > $(SKEL)
 
 # Compile firwall.c program
-$(FIREWALL_OBJ): firewall.c cJSON.h cJSON.c config.h rules_parser.c rules_notify.c $(SKEL) | $(OUTPUT)
+$(FIREWALL_OBJ): firewall.c lib/cJSON.h lib/cJSON.c config.h rules_parser.c rules_notify.c $(SKEL) | $(OUTPUT)
 	@echo "  GCC     $@"
 	$(CC) $(CFLAGS) \
 		-I$(OUTPUT) \
 		-c firewall.c\
 		-o $(FIREWALL_OBJ)
-$(RULES_PARSER_OBJ): rules_parser.c cJSON.h cJSON.c config.h | $(OUTPUT)
+$(RULES_PARSER_OBJ): rules_parser.c lib/cJSON.h lib/cJSON.c config.h | $(OUTPUT)
 	@echo "  GCC     $@"
 	$(CC) $(CFLAGS) \
 		-c rules_parser.c \
@@ -65,10 +65,10 @@ $(RULES_NOTIFY_OBJ): rules_notify.c config.h | $(OUTPUT)
 	$(CC) $(CFLAGS) \
 		-c rules_notify.c \
 		-o $(RULES_NOTIFY_OBJ)
-$(CJSON_OBJ): cJSON.c cJSON.h | $(OUTPUT)
+$(CJSON_OBJ): lib/cJSON.c lib/cJSON.h | $(OUTPUT)
 	@echo "  GCC     $@"
 	$(CC) $(CFLAGS) \
-		-c cJSON.c \
+		-c lib/cJSON.c \
 		-o $(CJSON_OBJ)
 
 # Link firewall program

@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "cJSON.h"
+#include "lib/cJSON.h"
 #include "config.h"
 
 char* read_rules_file(const char* filename);
