@@ -5,3 +5,4 @@ firewall
 test.py
 test.c
 test
+test_*_runner
