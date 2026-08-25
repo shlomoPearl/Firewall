@@ -151,7 +151,7 @@ int main(int argc, char **argv) {
         goto cleanup;
     }
 
-    int inotify_fd = setup_inotify();
+    int inotify_fd = setup_inotify(RULES_FILE);
     if (inotify_fd < 0) {
         fprintf(stderr, "Failed to set up inotify\n");
         err = -1;
