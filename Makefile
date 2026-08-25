@@ -105,7 +105,7 @@ run_inotify_test: $(TEST_INOTIFY)
 $(TEST_PARSER): tests/test_parser.o rules_parser.o lib/cJSON.o lib/unity.o 
 	$(CC) $(CFLAGS) $^ -o $@
 
-$(TEST_INOTIFY): tests/test_inotify.o rules_notify.o lib/unity.o
+$(TEST_INOTIFY): tests/test_notify.o rules_notify.o lib/unity.o
 	$(CC) $(CFLAGS) $^ -o $@
 
 %.o: %.c
