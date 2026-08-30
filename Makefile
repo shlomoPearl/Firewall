@@ -103,7 +103,8 @@ run_inotify_test: $(TEST_INOTIFY)
 
 
 $(TEST_PARSER): tests/test_parser.o rules_parser.o lib/cJSON.o lib/unity.o firewall.o
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ -o $@ -lbpf -lelf -lz 
+		
 
 $(TEST_INOTIFY): tests/test_notify.o rules_notify.o lib/unity.o
 	$(CC) $(CFLAGS) $^ -o $@
