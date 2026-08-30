@@ -4,6 +4,7 @@
 #include "../lib/unity.h"
 #include "../lib/cJSON.h"
 #include "../rules_parser.h"
+#include "../firewall.h"
 
 #define TEST_FILENAME "test_rules.json"
 
@@ -14,6 +15,15 @@ const char* VALID_JSON_CONTENT =
 "}\n";
 
 const char* INVALID_JSON_CONTENT = "{ this is invalid json }";
+const char* INVALID_JSON_PORT_VALUE = "{\n"
+"  \"ip_blacklist\": [\"192.168.1.100\", \"10.0.0.5\"],\n"
+"  \"port_blacklist\": [80, \"0\", \"65536\"]\n"
+"}\n";
+;
+const char* INVALID_JSON_IP_VALUE = "{\n"
+"  \"ip_blacklist\": [\"300.168.1.100\", 10.0.0.5, \"invalid_ip\"],\n"
+"  \"port_blacklist\": [\"80\", \"443\"]\n"
+"}\n";
 
 static void create_test_file(const char* filename, const char* content) {
     FILE* f = fopen(filename, "w");
@@ -85,6 +95,44 @@ void test_get_blacklist_invalid(void) {
     cJSON* ip_list = get_blacklist(json, "ip_blacklist");
     TEST_ASSERT_NULL(ip_list);
     cJSON_Delete(json);
+}
+
+void test_ip_list_2_map(void) {
+    cJSON* rules_json = parse_rules(INVALID_JSON_IP_VALUE);
+    TEST_ASSERT_NOT_NULL(rules_json);
+    cJSON* ip_blacklist = get_blacklist(rules_json, "ip_blacklist");
+    TEST_ASSERT_NOT_NULL(ip_blacklist);
+    struct bpf_map *black_map = NULL; // dont need real map for this test, just checking the json part
+    ip_list_2_map(ip_blacklist, black_map);
+    __u32 count = 0;
+    __u32 key, next_key;
+    int size = bpf_map__get_next_key(black_map, NULL, &next_key);
+    while (size == 0) {
+        count++;
+        key = next_key;
+        size = bpf_map__get_next_key(black_map, &key, &next_key);
+    }
+    TEST_ASSERT_EQUAL_INT(0, count);
+    cJSON_Delete(rules_json);
+}
+
+void test_port_list_2_map(void) {
+    cJSON* rules_json = parse_rules(INVALID_JSON_PORT_VALUE);
+    TEST_ASSERT_NOT_NULL(rules_json);
+    cJSON* port_blacklist = get_blacklist(rules_json, "port_blacklist");
+    TEST_ASSERT_NOT_NULL(port_blacklist);
+    struct bpf_map *black_map = NULL; // dont need real map for this test, just checking the json part
+    port_list_2_map(port_blacklist, black_map);
+    __u32 count = 0;
+    __u32 key, next_key;
+    int size = bpf_map__get_next_key(black_map, NULL, &next_key);
+    while (size == 0) {
+        count++;
+        key = next_key;
+        size = bpf_map__get_next_key(black_map, &key, &next_key);
+    }
+    TEST_ASSERT_EQUAL_INT(0, count);
+    cJSON_Delete(rules_json);
 }
 
 void test_setup_json_success(void) {

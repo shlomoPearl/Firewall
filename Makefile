@@ -95,14 +95,14 @@ run_all_tests: $(TEST_PARSER) $(TEST_INOTIFY)
 	./$(TEST_PARSER)
 	./$(TEST_INOTIFY)
 
-run_parser_test: $(TEST_PARSER)
+run_parser_test: $(SKEL) $(TEST_PARSER) 
 	./$(TEST_PARSER)
 
 run_inotify_test: $(TEST_INOTIFY)
 	./$(TEST_INOTIFY)
 
 
-$(TEST_PARSER): tests/test_parser.o rules_parser.o lib/cJSON.o lib/unity.o 
+$(TEST_PARSER): tests/test_parser.o rules_parser.o lib/cJSON.o lib/unity.o firewall.o
 	$(CC) $(CFLAGS) $^ -o $@
 
 $(TEST_INOTIFY): tests/test_notify.o rules_notify.o lib/unity.o
