@@ -8,45 +8,6 @@ void handle_signal(int sig) {
 }
 
 
-int ip_list_2_map(cJSON* ip_list, struct bpf_map *black_map) {
-    cJSON* ip = NULL;
-    cJSON_ArrayForEach(ip, ip_list) {
-        if (cJSON_IsString(ip)) {
-            const char* ip_str = ip->valuestring;
-            struct in_addr addr;
-            if (inet_pton(AF_INET, ip_str, &addr) != 1) {
-                fprintf(stderr, "Invalid IP address: %s\n", ip_str);
-                continue;
-            }
-            uint32_t ip_key = ntohl(addr.s_addr); // host order as bpf 
-            uint8_t value = 1; // Value to indicate blocked
-            if (bpf_map_update_elem(bpf_map__fd(black_map), &ip_key, &value, BPF_ANY) != 0) {
-                fprintf(stderr, "Failed to update black_map for IP: %s\n", ip_str);
-            }
-        }
-    }
-    return 0;
-}
-int port_list_2_map(cJSON* port_list, struct bpf_map *black_map) {
-    cJSON* port = NULL;
-    cJSON_ArrayForEach(port, port_list) {
-        if (cJSON_IsString(port)) {
-            const char* port_str = port->valuestring;
-            uint16_t port_num = (uint16_t)atoi(port_str);
-            if (port_num < 1 || port_num > 65535) {
-                fprintf(stderr, "Invalid port number: %s\n", port_str);
-                continue;
-            }
-            uint16_t port_key = (uint16_t)port_num; 
-            uint8_t value = 1; 
-            if (bpf_map_update_elem(bpf_map__fd(black_map), &port_key, &value, BPF_ANY) != 0) {
-                fprintf(stderr, "Failed to update black_map for port: %s\n", port_str);
-            }
-        }
-    }
-    return 0;
-}
-
 int main(int argc, char **argv) {
     signal(SIGINT, handle_signal);
     signal(SIGTERM, handle_signal);

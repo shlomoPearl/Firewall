@@ -13,8 +13,8 @@
 #include "lib/cJSON.h"
 #include "rules_parser.h"
 #include "rules_notify.h"
+#include "map_loader.h"
 #include "firewall.skel.h"  // Generated skeleton header
 
 void handle_signal(int sig);
-int ip_list_2_map(cJSON* ip_list, struct bpf_map *black_map);
-int port_list_2_map(cJSON* port_list, struct bpf_map *black_map);
+int main(int argc, char **argv);
