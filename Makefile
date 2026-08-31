@@ -102,7 +102,7 @@ run_inotify_test: $(TEST_INOTIFY)
 	./$(TEST_INOTIFY)
 
 
-$(TEST_PARSER): tests/test_parser.o rules_parser.o map_loader.o lib/cJSON.o lib/unity.o map_loader.o
+$(TEST_PARSER): tests/test_parser.o rules_parser.o map_loader.o lib/cJSON.o lib/unity.o 
 	$(CC) $(CFLAGS) $^ -o $@ -lbpf -lelf -lz 
 		
 
