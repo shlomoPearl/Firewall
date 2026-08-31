@@ -48,7 +48,7 @@ $(SKEL): $(BPF_OBJ)
 	$(BPFTOOL) gen skeleton $(BPF_OBJ) > $(SKEL)
 
 # Compile firwall.c program
-$(FIREWALL_OBJ): firewall.c lib/cJSON.h lib/cJSON.c config.h rules_parser.c rules_notify.c $(SKEL) | $(OUTPUT)
+$(FIREWALL_OBJ): firewall.c lib/cJSON.h lib/cJSON.c config.h rules_parser.c rules_notify.c map_loader.c $(SKEL) | $(OUTPUT)
 	@echo "  GCC     $@"
 	$(CC) $(CFLAGS) \
 		-I$(OUTPUT) \
@@ -95,14 +95,14 @@ run_all_tests: $(TEST_PARSER) $(TEST_INOTIFY)
 	./$(TEST_PARSER)
 	./$(TEST_INOTIFY)
 
-run_parser_test: $(SKEL) $(TEST_PARSER) 
+run_parser_test: $(TEST_PARSER) 
 	./$(TEST_PARSER)
 
 run_inotify_test: $(TEST_INOTIFY)
 	./$(TEST_INOTIFY)
 
 
-$(TEST_PARSER): tests/test_parser.o rules_parser.o lib/cJSON.o lib/unity.o firewall.o
+$(TEST_PARSER): tests/test_parser.o rules_parser.o map_loader.o lib/cJSON.o lib/unity.o map_loader.o
 	$(CC) $(CFLAGS) $^ -o $@ -lbpf -lelf -lz 
 		
 
