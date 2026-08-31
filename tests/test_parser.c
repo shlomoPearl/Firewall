@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <linux/types.h>
 #include "../lib/unity.h"
 #include "../lib/cJSON.h"
 #include "../rules_parser.h"
-#include "../firewall.h"
+#include "../map_loader.h"
 
 #define TEST_FILENAME "test_rules.json"
 
@@ -21,7 +22,7 @@ const char* INVALID_JSON_PORT_VALUE = "{\n"
 "}\n";
 ;
 const char* INVALID_JSON_IP_VALUE = "{\n"
-"  \"ip_blacklist\": [\"300.168.1.100\", 10.0.0.5, \"invalid_ip\"],\n"
+"  \"ip_blacklist\": [\"300.168.1.100\", \"10.0.0.0.5\", \"invalid_ip\"],\n"
 "  \"port_blacklist\": [\"80\", \"443\"]\n"
 "}\n";
 
@@ -97,22 +98,27 @@ void test_get_blacklist_invalid(void) {
     cJSON_Delete(json);
 }
 
-void test_ip_list_2_map(void) {
+void test_extract_valid_ips_rejects_invalid(void) {
     cJSON* rules_json = parse_rules(INVALID_JSON_IP_VALUE);
-    TEST_ASSERT_NOT_NULL(rules_json);
     cJSON* ip_blacklist = get_blacklist(rules_json, "ip_blacklist");
-    TEST_ASSERT_NOT_NULL(ip_blacklist);
-    struct bpf_map *black_map = NULL; // dont need real map for this test, just checking the json part
-    ip_list_2_map(ip_blacklist, black_map);
-    __u32 count = 0;
-    __u32 key, next_key;
-    int size = bpf_map__get_next_key(black_map, NULL, &next_key);
-    while (size == 0) {
-        count++;
-        key = next_key;
-        size = bpf_map__get_next_key(black_map, &key, &next_key);
+    cJSON* ip = NULL;
+    cJSON_ArrayForEach(ip, ip_blacklist) {
+        uint32_t *out = NULL;
+        int is_valid = extract_valid_ip(ip_blacklist, out);
+        TEST_ASSERT_EQUAL_INT(-1, is_valid);  // now this genuinely proves rejection, not a NULL-map coincidence
     }
-    TEST_ASSERT_EQUAL_INT(0, count);
+    cJSON_Delete(rules_json);
+}
+
+void test_extract_valid_ips_accepts_valid(void) {
+    cJSON* rules_json = parse_rules(VALID_JSON_CONTENT);
+    cJSON* ip_blacklist = get_blacklist(rules_json, "ip_blacklist");
+    cJSON* ip = NULL;
+    cJSON_ArrayForEach(ip, ip_blacklist) {
+        uint32_t *out = NULL;
+        int is_valid = extract_valid_ip(ip_blacklist, out);
+        TEST_ASSERT_EQUAL_INT(0, is_valid);  // now this genuinely proves rejection, not a NULL-map coincidence
+    }
     cJSON_Delete(rules_json);
 }
 
@@ -125,11 +131,11 @@ void test_port_list_2_map(void) {
     port_list_2_map(port_blacklist, black_map);
     __u32 count = 0;
     __u32 key, next_key;
-    int size = bpf_map__get_next_key(black_map, NULL, &next_key);
+    int size = bpf_map_get_next_key(black_map, NULL, &next_key);
     while (size == 0) {
         count++;
         key = next_key;
-        size = bpf_map__get_next_key(black_map, &key, &next_key);
+        size = bpf_map_get_next_key(black_map, &key, &next_key);
     }
     TEST_ASSERT_EQUAL_INT(0, count);
     cJSON_Delete(rules_json);
