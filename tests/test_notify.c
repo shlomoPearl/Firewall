@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/inotify.h>
 #include "../lib/unity.h"
 #include "../lib/cJSON.h"
@@ -43,7 +44,9 @@ void test_write_rules_changes(void) {
     TEST_ASSERT_NOT_NULL(fd);
     fputs("TEST", fd); // trigger IN_CLOSE_WRITE event
     fclose(fd);
-    sleep(1); // Give some time for the event to be processed
+    struct pollfd pfd = {.fd = inotify_fd, .events = POLLIN};
+    int ready = poll(&pfd, 1, 1000);
+    TEST_ASSERT_TRUE(ready > 0);
     int reload_needed = watch_rules_changes(inotify_fd);
     TEST_ASSERT_TRUE(reload_needed == 1);
     remove(NOTIFY_TEST_FILE); 
@@ -59,8 +62,10 @@ void test_moved_rules_changes(void) {
     fputs("TEST", fd);
     fclose(fd);
     int rename_result = rename(temp_source, NOTIFY_TEST_FILE); // trigger IN_MOVED_TO event
-    sleep(1);
+    struct pollfd pfd = {.fd = inotify_fd, .events = POLLIN};
+    int ready = poll(&pfd, 1, 1000);
     TEST_ASSERT_TRUE(rename_result == 0);    
+    TEST_ASSERT_TRUE(ready > 0);
     int reload_needed = watch_rules_changes(inotify_fd);
     TEST_ASSERT_TRUE(reload_needed == 1);
     close(inotify_fd);
