@@ -23,7 +23,13 @@ char* read_rules_file(const char* filename) {
         return NULL;
     }
 
-    fread(content, 1, length, file);
+    int bytes_read = fread(content, 1, length, file);
+    if (bytes_read != length) {
+        perror("Failed to read rules file content");
+        free(content);
+        fclose(file);
+        return NULL;
+    }
     content[length] = '\0';
     fclose(file);
 
