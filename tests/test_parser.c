@@ -164,17 +164,17 @@ void test_setup_json_file_error(void) {
 
 int main(void) {
     UNITY_BEGIN();
-    // RUN_TEST(test_read_rules_file_exist);
-    // RUN_TEST(test_read_rules_file_not_found);
-    // RUN_TEST(test_parse_rules_valid);
-    // RUN_TEST(test_parse_rules_invalid);
-    // RUN_TEST(test_get_blacklist_valid);
-    // RUN_TEST(test_get_blacklist_invalid);
+    RUN_TEST(test_read_rules_file_exist);
+    RUN_TEST(test_read_rules_file_not_found);
+    RUN_TEST(test_parse_rules_valid);
+    RUN_TEST(test_parse_rules_invalid);
+    RUN_TEST(test_get_blacklist_valid);
+    RUN_TEST(test_get_blacklist_invalid);
     RUN_TEST(test_rejects_invalid_ips);
     RUN_TEST(test_accepts_valid_ips);
     RUN_TEST(test_rejects_invalid_ports);
     RUN_TEST(test_accepts_valid_ports);
-    // RUN_TEST(test_setup_json_success);
-    // RUN_TEST(test_setup_json_file_error);
+    RUN_TEST(test_setup_json_success);
+    RUN_TEST(test_setup_json_file_error);
     return UNITY_END();
 }
