@@ -22,6 +22,7 @@
 #define DST_IP "127.0.0.1"
 #define SRC_PORT 80
 
+
 struct test_result {
     const char *test_name;
     int expected_action;
@@ -63,8 +64,8 @@ static struct test_result run_test_case(int prog_fd, const char *test_name, int 
         .expected_action = expected_action,
         .passed = false
     };
-
-    LIBBPF_OPTS(bpf_test_run_ops, opts,
+    
+    LIBBPF_OPTS(bpf_test_run_opts, opts,
         .data_in = packet,
         .data_size_in = PACKET_SIZE,
         .repeat = 1,
@@ -84,10 +85,66 @@ static struct test_result run_test_case(int prog_fd, const char *test_name, int 
 
 void setUp(void) {
     // This function is called before each test case
+
 }
 
 void tearDown(void) {
     // This function is called after each test case
+}
+
+void test_xdp_drop_black_ip(int prog_fd, const char* packet) {
+    LIBBPF_OPTS(bpf_test_run_opts, opts,
+        .data_in = packet,
+        .data_size_in = PACKET_SIZE,
+        .repeat = 1,
+    );    
+    int err = bpf_prog_test_run_opts(prog_fd, &opts);
+    TEST_ASSERT_EQUAL_INT(0, err);
+    TEST_ASSERT_EQUAL_INT(XDP_DROP, opts.retval);
+}
+
+void test_xdp_drop_black_port(int prog_fd, const char* packet) {
+    LIBBPF_OPTS(bpf_test_run_opts, opts,
+        .data_in = packet,
+        .data_size_in = PACKET_SIZE,
+        .repeat = 1,
+    );    
+    int err = bpf_prog_test_run_opts(prog_fd, &opts);
+    TEST_ASSERT_EQUAL_INT(0, err);
+    TEST_ASSERT_EQUAL_INT(XDP_DROP, opts.retval);
+}
+
+void test_xdp_drop_malformed(int prog_fd, const char* packet) {
+    LIBBPF_OPTS(bpf_test_run_opts, opts,
+        .data_in = packet,
+        .data_size_in = PACKET_SIZE,
+        .repeat = 1,
+    );    
+    int err = bpf_prog_test_run_opts(prog_fd, &opts);
+    TEST_ASSERT_EQUAL_INT(0, err);
+    TEST_ASSERT_EQUAL_INT(XDP_DROP, opts.retval);
+}
+
+void test_xdp_drop_fragments(int prog_fd, const char* packet) {
+    LIBBPF_OPTS(bpf_test_run_opts, opts,
+        .data_in = packet,
+        .data_size_in = PACKET_SIZE,
+        .repeat = 1,
+    );    
+    int err = bpf_prog_test_run_opts(prog_fd, &opts);
+    TEST_ASSERT_EQUAL_INT(0, err);
+    TEST_ASSERT_EQUAL_INT(XDP_DROP, opts.retval);
+}
+
+void test_xdp_pass(int prog_fd, const char* packet) {
+    LIBBPF_OPTS(bpf_test_run_opts, opts,
+        .data_in = packet,
+        .data_size_in = PACKET_SIZE,
+        .repeat = 1,
+    );    
+    int err = bpf_prog_test_run_opts(prog_fd, &opts);
+    TEST_ASSERT_EQUAL_INT(0, err);
+    TEST_ASSERT_EQUAL_INT(XDP_PASS, opts.retval);
 }
 
 
@@ -143,7 +200,7 @@ int main(int argc, char **argv) {
     
     int prog_fd = bpf_program__fd(prog);
     
-    // UNITY_BEGIN();
+    UNITY_BEGIN();
     printf("=== Firewall XDP Filter Unit Tests ===\n\n");
 
     // Define test cases
@@ -199,6 +256,6 @@ int main(int argc, char **argv) {
            (double)passed_tests / total_tests * 100);
 
     bpf_object__close(obj);
-    // return UNITY_END();
-    return (passed_tests == total_tests) ? 0 : 1;
+    return UNITY_END();
+    // return (passed_tests == total_tests) ? 0 : 1;
 }
