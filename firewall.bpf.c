@@ -27,16 +27,16 @@ static bool is_tcp_udp(struct iphdr *ip){
 }
 
 SEC("xdp")
-int xdp_pass(struct xdp_md *ctx)
-{
+int xdp_filter(struct xdp_md *ctx){
     // Pointers to packet data
     void *data = (void *)(long)ctx->data;
     void *data_end = (void *)(long)ctx->data_end;
     
     // Parse Ethernet header
+    // Drop malformed or truncated packets 
     struct ethhdr *eth = data;
     if ((void *)(eth + 1) > data_end){
-        return XDP_PASS;
+        return XDP_DROP;
     }
     if (bpf_ntohs(eth->h_proto) != ETH_P_IP){
         return XDP_PASS;
@@ -44,7 +44,7 @@ int xdp_pass(struct xdp_md *ctx)
         
     struct iphdr *ip = (struct iphdr *)(eth + 1);
     if ((void *)(ip + 1) > data_end){
-        return XDP_PASS;
+        return XDP_DROP;
     }
     // Drop fragmented packets to prevent ip fragmentation attacks, as we cannot inspect the full packet
     if (ip->frag_off & bpf_htons(0x3FFF)) { 
@@ -58,12 +58,12 @@ int xdp_pass(struct xdp_md *ctx)
     // Calculate IP header length
     int ip_hdr_len = ip->ihl * 4;
     if (ip_hdr_len < sizeof(struct iphdr)) {
-        return XDP_PASS;
+        return XDP_DROP;
     }
 
     // Ensure IP header is within packet bounds
     if ((void *)ip + ip_hdr_len > data_end) {
-        return XDP_PASS;
+        return XDP_DROP;
     }
     
     __u32 src_ip = bpf_ntohl(ip->saddr);
@@ -72,11 +72,11 @@ int xdp_pass(struct xdp_md *ctx)
     if (ip->protocol == IPPROTO_TCP) {
         struct tcphdr *tcp = (struct tcphdr *)((unsigned char *)ip + ip_hdr_len);
         if ((void *)(tcp + 1) > data_end) {
-            return XDP_PASS;
+            return XDP_DROP;
         }
         __u32 tcp_header_bytes = tcp->doff * 4;
         if (tcp_header_bytes < sizeof(*tcp) || (void *)tcp + tcp_header_bytes > data_end) {
-            return XDP_PASS;
+            return XDP_DROP;
         }
 
         src_port = bpf_ntohs(tcp->source); 
@@ -85,7 +85,7 @@ int xdp_pass(struct xdp_md *ctx)
     else if (ip->protocol == IPPROTO_UDP) {
         struct udphdr *udp = (struct udphdr *)((unsigned char *)ip + ip_hdr_len);
         if ((void *)(udp + 1) > data_end) {
-            return XDP_PASS;
+            return XDP_DROP;
         }
         src_port = bpf_ntohs(udp->source);
         dst_port = bpf_ntohs(udp->dest);
