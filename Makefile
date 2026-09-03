@@ -6,6 +6,7 @@ OUTPUT := .output
 APP    := firewall
 TEST_PARSER  := test_parser_runner
 TEST_INOTIFY := test_inotify_runner
+TEST_XDP := test_xdp_filter_runner
 
 BPF_OBJ := $(OUTPUT)/firewall.bpf.o
 SKEL    := $(OUTPUT)/firewall.skel.h
@@ -83,13 +84,19 @@ $(TEST_INOTIFY): tests/test_notify.o rules_notify.o lib/unity.o
 	@echo "  LINK    $@"
 	$(CC) $(CFLAGS) $^ -o $@
 
+$(TEST_XDP): tests/test_xdp_filter.o $(BPF_OBJ) lib/unity.o
+	@echo "  LINK    $@"
+	$(CC) $(CFLAGS) $^ -lbpf -lelf -lz -o $@
+
 run_parser_test: $(TEST_PARSER)
 	./$(TEST_PARSER)
 
 run_inotify_test: $(TEST_INOTIFY)
 	./$(TEST_INOTIFY)
 
-run_all_tests: run_parser_test run_inotify_test
+run_xdp_test: $(TEST_XDP) $(BPF_OBJ)
+	./$(TEST_XDP) $(BPF_OBJ)
+run_all_tests: run_parser_test run_inotify_test run_xdp_test
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -106,9 +113,9 @@ clean:
 
 clean_tests:
 	@echo "  CLEAN   test binaries and objects"
-	rm -f $(TEST_PARSER) $(TEST_INOTIFY) *.o lib/*.o tests/*.o
+	rm -f $(TEST_PARSER) $(TEST_INOTIFY) $(TEST_XDP) *.o lib/*.o tests/*.o
 
 clean_all: clean clean_tests
 
 .PHONY: all clean clean_tests clean_all \
-        run_parser_test run_inotify_test run_all_tests
+        run_parser_test run_inotify_test run_xdp_test run_all_tests
