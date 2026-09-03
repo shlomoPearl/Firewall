@@ -5,7 +5,6 @@
 #include <errno.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
-#include <linux/in.h>
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
