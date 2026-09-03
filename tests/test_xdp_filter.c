@@ -190,7 +190,7 @@ int main(int argc, char **argv) {
         bpf_object__close(obj);
         return 1;
     }
-    struct bpf_program *prog = bpf_object__find_program_by_name(obj, "xdp");
+    struct bpf_program *prog = bpf_object__find_program_by_name(obj, "xdp_filter");
     if (!prog) {
         fprintf(stderr, "Failed to find XDP program\n");
         bpf_object__close(obj);
