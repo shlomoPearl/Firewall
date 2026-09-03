@@ -84,9 +84,9 @@ $(TEST_INOTIFY): tests/test_notify.o rules_notify.o lib/unity.o
 	@echo "  LINK    $@"
 	$(CC) $(CFLAGS) $^ -o $@
 
-$(TEST_XDP): tests/test_xdp_filter.o $(BPF_OBJ) lib/unity.o
+$(TEST_XDP): tests/test_xdp_filter.o lib/unity.o | $(BPF_OBJ)
 	@echo "  LINK    $@"
-	$(CC) $(CFLAGS) $^ -lbpf -lelf -lz -o $@
+	$(CC) $(CFLAGS) tests/test_xdp_filter.o lib/unity.o -lbpf -lelf -lz -o $@
 
 run_parser_test: $(TEST_PARSER)
 	./$(TEST_PARSER)
@@ -95,7 +95,7 @@ run_inotify_test: $(TEST_INOTIFY)
 	./$(TEST_INOTIFY)
 
 run_xdp_test: $(TEST_XDP) $(BPF_OBJ)
-	./$(TEST_XDP) $(BPF_OBJ)
+	sudo ./$(TEST_XDP) $(BPF_OBJ)
 run_all_tests: run_parser_test run_inotify_test run_xdp_test
 
 %.o: %.c
