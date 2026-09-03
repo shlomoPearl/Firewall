@@ -56,8 +56,8 @@ int main(int argc, char **argv) {
     }
 
     /* Attach the XDP program to the specified interface */
-    skel->links.xdp_pass = bpf_program__attach_xdp(skel->progs.xdp_pass, ifindex);
-    if (!skel->links.xdp_pass)
+    skel->links.xdp_filter = bpf_program__attach_xdp(skel->progs.xdp_filter, ifindex);
+    if (!skel->links.xdp_filter)
     {
         err = -errno;
         fprintf(stderr, "Failed to attach XDP program: %s\n", strerror(errno));
@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
     }
 
     cleanup:
-        bpf_link__destroy(skel->links.xdp_pass);
+        bpf_link__destroy(skel->links.xdp_filter);
         firewall_bpf__destroy(skel);
         return -err;
 }
