@@ -51,11 +51,9 @@ int xdp_filter(struct xdp_md *ctx){
         return XDP_DROP;
     }
 
-    if (!is_tcp_udp(ip)) {
-        return XDP_PASS;
-    }
     
     // Calculate IP header length
+    // *4 because the IHL field is in 32-bit words
     int ip_hdr_len = ip->ihl * 4;
     if (ip_hdr_len < sizeof(struct iphdr)) {
         return XDP_DROP;
@@ -67,6 +65,14 @@ int xdp_filter(struct xdp_md *ctx){
     }
     
     __u32 src_ip = bpf_ntohl(ip->saddr);
+    __u8 *ip_rule = bpf_map_lookup_elem(&ip_blacklist, &src_ip);
+    if ((ip_rule && *ip_rule)) {
+        return XDP_DROP;
+    }
+    if (!is_tcp_udp(ip)) {
+        return XDP_PASS;
+    }
+    
     __u16 src_port;
     __u16 dst_port;
     if (ip->protocol == IPPROTO_TCP) {
@@ -93,10 +99,9 @@ int xdp_filter(struct xdp_md *ctx){
         return XDP_PASS;
     }
     
-    __u8 *ip_rule = bpf_map_lookup_elem(&ip_blacklist, &src_ip);
     __u8 *src_port_rule = bpf_map_lookup_elem(&port_blacklist, &src_port);
     __u8 *dst_port_rule = bpf_map_lookup_elem(&port_blacklist, &dst_port);
-    if ((ip_rule && *ip_rule) || (src_port_rule && *src_port_rule) || (dst_port_rule && *dst_port_rule)) {
+    if ((src_port_rule && *src_port_rule) || (dst_port_rule && *dst_port_rule)) {
         return XDP_DROP;
     }
     return XDP_PASS;
