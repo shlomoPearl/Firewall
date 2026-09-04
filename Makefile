@@ -84,9 +84,9 @@ $(TEST_INOTIFY): tests/test_notify.o rules_notify.o lib/unity.o
 	@echo "  LINK    $@"
 	$(CC) $(CFLAGS) $^ -o $@
 
-$(TEST_XDP): tests/test_xdp_filter.o lib/unity.o | $(BPF_OBJ)
+$(TEST_XDP): tests/test_xdp_filter.o generate_packet.o lib/unity.o | $(BPF_OBJ)
 	@echo "  LINK    $@"
-	$(CC) $(CFLAGS) tests/test_xdp_filter.o lib/unity.o -lbpf -lelf -lz -o $@
+	$(CC) $(CFLAGS) tests/test_xdp_filter.o generate_packet.o lib/unity.o -lbpf -lelf -lz -o $@
 
 run_parser_test: $(TEST_PARSER)
 	./$(TEST_PARSER)
