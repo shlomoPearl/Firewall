@@ -4,6 +4,7 @@
 #include <netinet/udp.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
+#include <string.h>
 
 #define PACKET_SIZE 64
 #define MALFORMED_CHECKS 7

@@ -34,7 +34,7 @@ void create_malformed_packets(char *packet) {
     struct ethhdr *eth = (struct ethhdr *)packet;
     eth->h_proto = htons(ETH_P_IP);
     // packet 2: packet too short for IP header
-    *eth = (struct ethhdr *)packet + PACKET_SIZE;
+    eth = (struct ethhdr *)(packet + PACKET_SIZE);
     eth->h_proto = htons(ETH_P_IP);
     struct iphdr *ip = (struct iphdr *)(packet + PACKET_SIZE + sizeof(struct ethhdr));
     ip->version = 4;
@@ -44,7 +44,7 @@ void create_malformed_packets(char *packet) {
     ip->saddr = inet_addr(DC_IP_S);
     ip->daddr = inet_addr(DC_IP_D);
     // packet 3: IHL field indicates a header length that is lower than the actual packet size
-    *eth = (struct ethhdr *)packet + 2 * PACKET_SIZE;
+    eth = (struct ethhdr *)(packet + 2 * PACKET_SIZE);
     eth->h_proto = htons(ETH_P_IP);
     struct iphdr *ip2 = (struct iphdr *)(packet + 2 * PACKET_SIZE + sizeof(struct ethhdr));
     ip2->version = 4;
@@ -54,7 +54,7 @@ void create_malformed_packets(char *packet) {
     ip2->saddr = inet_addr(DC_IP_S);
     ip2->daddr = inet_addr(DC_IP_D);
     // packet 4: iph + iph_len exceeds the valid packet size
-    *eth = (struct ethhdr *)packet + 3 * PACKET_SIZE;
+    eth = (struct ethhdr *)(packet + 3 * PACKET_SIZE);
     eth->h_proto = htons(ETH_P_IP);
     struct iphdr *ip3 = (struct iphdr *)(packet + 3 * PACKET_SIZE + sizeof(struct ethhdr));
     ip3->version = 4;
@@ -70,11 +70,9 @@ void create_malformed_packets(char *packet) {
     // packet 6: tcp + tcp_len exceeds the valid packet size
     create_ipv4_packet(packet + 5 * PACKET_SIZE, IPPROTO_TCP, DC_IP_S, DC_IP_D, 80, 443);
     struct tcphdr *tcp2 = (struct tcphdr *)(packet + 5 * PACKET_SIZE + sizeof(struct ethhdr) + sizeof(struct iphdr));
-    tcp2->doff = 20; // TCP header length indicates 80 bytes, but the actual packet size is only 64 bytes
+    tcp2->doff = 15; // TCP header length indicates 80 bytes, but the actual packet size is only 64 bytes
     // packet 7: UDP header exceeds the valid packet size
     create_ipv4_packet(packet + 6 * PACKET_SIZE, IPPROTO_UDP, DC_IP_S, DC_IP_D, 80, 443);
-    struct udphdr *udp = (struct udphdr *)(packet + 6 * PACKET_SIZE + sizeof(struct ethhdr) + sizeof(struct iphdr));
-
 }
 
 void create_fragmented_packet(char *packet) {

@@ -38,14 +38,17 @@ void tearDown(void) {
 }
 
 int run_opts_out(char * packet, int packet_size){
-    __u32 retval = 0;
-    int err = bpf_prog_test_run(prog_fd, 1, packet, packet_size,
-                                NULL, 0, &retval, NULL);
+    LIBBPF_OPTS(bpf_test_run_opts, opts,
+	.data_in = packet,
+	.data_size_in = packet_size,
+	.repeat = 1
+    );
+    int err = bpf_prog_test_run_opts(prog_fd, &opts);
     if (err){
         fprintf(stderr, "Failed to run test\n");
         return err;
     }
-    return retval;
+    return opts.retval;
 }
 
 void test_expect_drop(void) {
