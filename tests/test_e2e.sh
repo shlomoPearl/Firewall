@@ -28,7 +28,62 @@ start_firewall() {
 }
 
 stop_firewall() {
-    sudo pkill -f ./firewall
+    sudo pkill -$1 -f firewall
 }
+
+test_attach() {
+    echo "Testing attach/detach"
+    attached=$(sudo ip link show veth-host | grep "xdp_filter")
+    if [ -n "$attached" ]; then
+        return 0
+    else
+        echo "XDP program is NOT attached to veth-host"
+        return 1
+    fi
+}
+
+test_SIGINT_2_attached() {
+    echo "Testing SIGINT handling"
+    stop_firewall SIGINT
+    sleep 1  # Give it a moment to clean up
+    attached=$(sudo ip link show veth-host | grep "xdp_filter")
+    if [ -z "$attached" ]; then
+        return 0
+    else
+        echo "XDP program is STILL attached after SIGINT"
+        return 1
+    fi
+    start_firewall
+    test_attach
+    attached=$?
+    if [ $attached -ne 0 ]; then
+        echo "XDP program is NOT attached after SIGINT restart"
+        return 1
+    fi
+    return 0
+}
+
+test_SIGTERM_2_attached() {
+    echo "Testing SIGTERM handling"
+    stop_firewall SIGTERM  
+    sleep 1  # Give it a moment to clean up
+    attached=$(sudo ip link show veth-host | grep "xdp_filter")
+    if [ -z "$attached" ]; then
+        return 0
+    else
+        echo "XDP program is STILL attached after SIGTERM"
+        return 1
+    fi  
+    start_firewall
+    test_attach
+    attached=$?
+    if [ $attached -ne 0 ]; then
+        echo "XDP program is NOT attached after SIGTERM restart"
+        return 1
+    fi
+    return 0
+}
+
+
  
 trap cleanup_netns EXIT 
