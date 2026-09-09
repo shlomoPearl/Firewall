@@ -79,6 +79,7 @@ test_SIGTERM_2_attached() {
 }
 
 
+
 test_drop_filtering() {
     echo "Testing packet filtering"
     # test 1: ip drop (also tests default drop policy)
@@ -210,7 +211,7 @@ test_drop_filtering() {
     fi
     truncate -s 0 recived.pcap
     truncate -s 0 sent.pcap
-    
+
     sudo ./malformed_packet.py $HOST_MAC 7 &
     sleep 0.5
     count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
@@ -261,6 +262,56 @@ test_pass_filtering() {
     else
         echo "Connection to 10.0.0.1:9999 UDP pass as expected"
     fi
+}
+
+test_add_rules() {
+
+}
+
+total_test=0
+test_pass=0
+test_fail=0
+
+check_status() {
+    ((total_test += 1))
+    if [ $1 -ne 0 ]; then
+        ((test_fail += 1))
+        echo "TEST - $2 FAIL"
+    else
+        ((test_pass += 1))
+        echo "TEST - $2 PASS"
+    fi
+}
+
+summary() {
+    echo "TOTAL TESTS: $total_test"
+    echo "PASSED: $test_pass"
+    echo "FAILED: $test_fail"   
+    echo "TEST SUMMARY: $test_pass/$total_test tests passed, $test_fail/$total_test tests failed"
+    echo "AVG PASS: $(echo "scale=2; $test_pass/$total_test*100" | bc)%"
+    echo "AVG FAIL: $(echo "scale=2; $test_fail/$total_test*100" | bc)%"
+}
+
+test_runner() {
+    setup_netns
+    start_firewall
+    test_attach
+    check_status $? "test_attach"
+
+    test_SIGINT_2_attached
+    check_status $? "test_SIGINT"
+
+    test_SIGTERM_2_attached
+    check_status $? "test_SIGTERM"
+
+    test_pass
+    check_status $? "test_pass"
+
+    test_drop_filtering
+    check_status $? "test_drop_filtering"
+
+    stop_firewall
+    cleanup_netns
 }
  
 trap cleanup_netns EXIT 
