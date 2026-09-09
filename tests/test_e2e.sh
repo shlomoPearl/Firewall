@@ -1,8 +1,10 @@
 RULES_FILE="rules.json"
 BLACK_PORT=9999
+NEW_BLACK_PORT=9090
 ALLOWED_PORT=9090
 HOST_IP=10.0.0.1
 BLACK_IP=10.0.0.2
+NEW_BLACK_IP=10.0.0.3
 ALLOWED_IP=10.0.0.3
 
 setup_netns() {
@@ -34,7 +36,7 @@ cleanup_netns() {
 
 start_firewall() {
     make -C .. all
-    sudo ./firewall veth-host &
+    sudo ./firewall veth-host test &
 }
 
 stop_firewall() {
@@ -97,17 +99,17 @@ check_drop() {
 test_drop_ip() {
     success=0
     # test 1: ip drop (also tests default drop policy)
-    sudo ip netns exec fw-test ping -I $BLACK_IP -c 1 -W 1 $HOST_IP 
+    sudo ip netns exec fw-test ping -I "$1" -c 1 -W 1 $HOST_IP 
     check_drop $? "Ping from veth-host succeeded, but it should have been blocked" "Ping from veth-host failed as expected"
     ((success +=$?))  
     # test 2: tcp ip drop
     nc -l -p $BLACK_PORT &
     sleep 1  # Give nc a moment to start listening
-    sudo ip netns exec fw-test nc -s $BLACK_IP $HOST_IP $ALLOWED_PORT
+    sudo ip netns exec fw-test nc -s "$1" $HOST_IP $ALLOWED_PORT
     check_drop $? "Connection to $HOST_IP:$ALLOWED_PORT succeeded, but it should have been blocked" "Connection to $HOST_IP:$ALLOWED_PORT failed as expected"
     ((success += $?))  
     # test 3: udp ip drop
-    sudo ip netns exec fw-test nc -s $BLACK_IP -u $HOST_IP $ALLOWED_PORT
+    sudo ip netns exec fw-test nc -s "$1" -u $HOST_IP $ALLOWED_PORT
     check_drop $? "Connection to $HOST_IP:$ALLOWED_PORT succeeded, but it should have been blocked" "Connection to $HOST_IP:$ALLOWED_PORT failed as expected"
     ((success += $?))  
     return "$success"
@@ -118,12 +120,12 @@ test_drop_port() {
     # test 4: tcp port drop
     nc -l -p $BLACK_PORT &
     sleep 1  # Give nc a moment to start listening
-    sudo ip netns exec fw-test-port nc -s $ALLOWED_IP $HOST_IP $BLACK_PORT
-    check_drop $? "Connection to $HOST_IP:$BLACK_PORT succeeded, but it should have been blocked" "Connection to $HOST_IP:$BLACK_PORT failed as expected"
+    sudo ip netns exec fw-test-port nc -s $ALLOWED_IP $HOST_IP "$1"
+    check_drop $? "Connection to $HOST_IP:$1 succeeded, but it should have been blocked" "Connection to $HOST_IP:$BLACK_PORT failed as expected"
     ((success += $?))  
     # test 5: udp port drop
-    sudo ip netns exec fw-test-port nc -s $ALLOWED_IP -u $HOST_IP $BLACK_PORT
-    check_drop $? "Connection to $HOST_IP:$BLACK_PORT succeeded, but it should have been blocked" "Connection to $HOST_IP:$BLACK_PORT failed as expected"
+    sudo ip netns exec fw-test-port nc -s $ALLOWED_IP -u $HOST_IP "$1"
+    check_drop $? "Connection to $HOST_IP:$1 succeeded, but it should have been blocked" "Connection to $HOST_IP:$BLACK_PORT failed as expected"
     ((success += $?))  
     return "$success"
 }
@@ -188,21 +190,21 @@ check_pass() {
 
 }
 
-test_pass() {
+test_packet_pass() {
     success=0
     #test 1: ip pass
-    sudo ip netns exec fw-test ping -c 1 -W 1 "$HOST_IP" 
+    sudo ip netns exec fw-test ping -c 1 -W 1 -I "$1" "$HOST_IP" 
     check_pass "$?" "Ping from veth-host unsucceeded, but it should have been pass" "Ping from veth-host unsucceeded, but it should have been pass"
     ((success += "$?"))
     # test 2: tcp pass
     nc -l -p "$ALLOWED_PORT" &
     sleep 1  # Give nc a moment to start listening
-    sudo ip netns exec fw-test nc "$HOST_IP" "$ALLOWED_PORT"
-    check_pass "$?" "Connection to '$HOST_IP':'$ALLOWED_PORT' TCP unsucceeded, but it should have been pass" "Connection to '$HOST_IP':'$ALLOWED_PORT' TCP pass as expected"
+    sudo ip netns exec fw-test nc "$HOST_IP" "$2"
+    check_pass "$?" "Connection to '$HOST_IP':'$2' TCP unsucceeded, but it should have been pass" "Connection to '$HOST_IP':'$ALLOWED_PORT' TCP pass as expected"
     ((success += "$?"))
     # test 3: udp pass
-    sudo ip netns exec fw-test nc -u "$HOST_IP" "$ALLOWED_IP"
-    check_pass "$?" "Connection to '$HOST_IP':'$ALLOWED_PORT' UDP unsucceeded, but it should have been pass" "Connection to '$HOST_IP':'$ALLOWED_PORT' UDP pass as expected"
+    sudo ip netns exec fw-test nc -u "$HOST_IP" "$2"
+    check_pass "$?" "Connection to '$HOST_IP':'$2' UDP unsucceeded, but it should have been pass" "Connection to '$HOST_IP':'$ALLOWED_PORT' UDP pass as expected"
     ((success += "$?"))
     return "$success"
 }
@@ -210,11 +212,27 @@ test_pass() {
 test_add_ip_rule() {
     jq '.ip_blacklist += ['"$1"']' "$RULES_FILE" > tmp.json && mv tmp.json "$RULES_FILE" 
     sleep 1
+    test_drop_ip "$1"
+    return "$?"
+}
+
+test_remove_ip_rule() {
+    jq '.ip_blacklist -= ['"$1"']' "$RULES_FILE" > tmp.json && mv tmp.json "$RULES_FILE" 
+    sleep 1
+    test_packet_pass "$1" "$ALLOWED_PORT"
 }
 
 test_add_port_rule() {
     jq '.port_blacklist += ['"$1"']' "$RULES_FILE" > tmp.json && mv tmp.json "$RULES_FILE" 
     sleep 1
+    test_drop_port "$1"
+    return "$?"
+}
+
+test_remove_port_rule() {
+    jq '.port_blacklist -= ['"$1"']' "$RULES_FILE" > tmp.json && mv tmp.json "$RULES_FILE" 
+    sleep 1
+    test_packet_pass "$ALLOWED_IP" "$1"
 }
 
 total_test=0
@@ -245,10 +263,10 @@ test_runner() {
     test_SIGTERM_2_attached
     check_status $? "test_SIGTERM"
 
-    test_drop_ip
+    test_drop_ip "$BLACK_IP"
     check_status $? "test_drop_ip"
 
-    test_drop_port
+    test_drop_port "$BLACK_PORT"
     check_status $? "test_drop_port"
 
     test_drop_fragment
@@ -257,8 +275,20 @@ test_runner() {
     test_drop_malformed
     check_status $? "test_drop_malformed"
 
-    test_pass
-    check_status $? "test_pass_filtering"
+    test_packet_pass "$ALLOWED_IP" "$ALLOWED_PORT"
+    check_status $? "test_packet_pass_filtering"
+
+    test_add_ip_rule "$NEW_BLACK_IP"
+    check_status $? test_add_ip_rule
+
+    test_remove_ip_rule "$NEW_BLACK_IP"
+    check_status $? test_remove_ip_rule
+
+    test_add_port_rule "$NEW_BLACK_PORT"
+    check_status $? test_add_port_rule
+
+    test_remove_port_rule "$NEW_BLACK_PORT"
+    check_status $? test_remove_port_rule
 
     summary
     stop_firewall SIGINT
