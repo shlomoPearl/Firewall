@@ -17,18 +17,28 @@ int main(int argc, char **argv) {
     int ifindex;
     int err;
 
-    if (argc != 2)
-    {
-        fprintf(stderr, "Usage: %s <ifname>\n", argv[0]);
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <ifname>\n <prod/test>", argv[0]);
+        return 1;
+    }
+    
+    const char *ifname = argv[1];
+    ifindex = if_nametoindex(ifname);
+    if (ifindex == 0){
+        fprintf(stderr, "Invalid interface name %s\n", ifname);
         return 1;
     }
 
-    const char *ifname = argv[1];
-    ifindex = if_nametoindex(ifname);
-    if (ifindex == 0)
-    {
-        fprintf(stderr, "Invalid interface name %s\n", ifname);
+    const char *rules_file_mod = argv[2];
+    if (strcmp(rules_file_mod, "test") && strcmp(rules_file_mod, "prod")){
+        fprintf(stderr, "Usage: %s <ifname>\n <prod/test> got %s", argv[0], argv[2]);
         return 1;
+    }
+    char * rules_file;
+    if (!strcmp(rules_file_mod, "test")){
+        rules_file = TEST_RULES_FILE
+    } else {
+        rules_file = RULES_FILE
     }
 
     /* Open and load BPF application */
@@ -77,7 +87,7 @@ int main(int argc, char **argv) {
     }
 
     // first load the rules from the file
-    cJSON* rules_json = setup_json(RULES_FILE);
+    cJSON* rules_json = setup_json(rules_file);
     if (rules_json == NULL) {
         fprintf(stderr, "Failed to set up JSON rules\n");
         err = -1;
@@ -97,7 +107,7 @@ int main(int argc, char **argv) {
         goto cleanup;
     }
 
-    int inotify_fd = setup_inotify(RULES_FILE);
+    int inotify_fd = setup_inotify(rules_file);
     if (inotify_fd < 0) {
         fprintf(stderr, "Failed to set up inotify\n");
         err = -1;
@@ -109,7 +119,7 @@ int main(int argc, char **argv) {
         int reload_needed = watch_rules_changes(inotify_fd);
         if (reload_needed) {
             printf("Reloading rules...\n");
-            rules_json = setup_json(RULES_FILE);
+            rules_json = setup_json(rules_file);
             if (rules_json == NULL) {
                 fprintf(stderr, "Failed to set up JSON rules\n");
                 continue; 
