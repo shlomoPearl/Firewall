@@ -23,6 +23,7 @@ cleanup_netns() {
     # Delete the veth pair and the network namespace
     sudo ip netns del fw-test
     sudo ip link del veth-host 2>/dev/null  # veth-ns is destroyed automatically with it
+    rm *.pcap
 }
 
 start_firewall() {
@@ -140,10 +141,92 @@ test_drop_filtering() {
     fi
     # test 7: malformed packet - TO-DO
     HOST_MAC=$(ip link show veth-host | awk '/link\/ether/ {print $2}')
-    sudo tcpdump -i veth-ns -w sent.pcap &
-    sudo tcpdump -i veth-host -w received.pcap &
-    sudo ./malformed_packet.py $HOST_MAC
+    sudo ip netns exec fw-test tcpdump -i veth-ns -n -w sent.pcap &
+    TCPDUMP_PID_NS=$!
+    sudo tcpdump -i veth-host -n -w received.pcap &
+    TCPDUMP_PID_HOST=$!
+
+    sudo ./malformed_packet.py $HOST_MAC 1 &
+    sleep 0.5
+    count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
+    count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
+    if [ $count_recived -ne 0 and $count_sent -le 0 ]; then
+        echo "Malformed packet1 error - not droped or not send"
+        return 1
+    else
+        echo "Malformed packet1 droped from veth-host as expected"
+    fi
+    truncate -s 0 recived.pcap
+    truncate -s 0 sent.pcap
+
+    sudo ./malformed_packet.py $HOST_MAC 2 &
+    sleep 0.5
+    count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
+    count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
+    if [ $count_recived -ne 0 and $count_sent -le 0 ]; then
+        echo "Malformed packet1 error - not droped or not send"
+        return 1
+    else
+        echo "Malformed packet1 droped from veth-host as expected"
+    fi
+    truncate -s 0 recived.pcap
+    truncate -s 0 sent.pcap
+
+    sudo ./malformed_packet.py $HOST_MAC 4 &
+    sleep 0.5
+    count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
+    count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
+    if [ $count_recived -ne 0 and $count_sent -le 0 ]; then
+        echo "Malformed packet1 error - not droped or not send"
+        return 1
+    else
+        echo "Malformed packet1 droped from veth-host as expected"
+    fi
+    truncate -s 0 recived.pcap
+    truncate -s 0 sent.pcap
+
+    sudo ./malformed_packet.py $HOST_MAC 5 &
+    sleep 0.5
+    count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
+    count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
+    if [ $count_recived -ne 0 and $count_sent -le 0 ]; then
+        echo "Malformed packet1 error - not droped or not send"
+        return 1
+    else
+        echo "Malformed packet1 droped from veth-host as expected"
+    fi
+    truncate -s 0 recived.pcap
+    truncate -s 0 sent.pcap
+
+    sudo ./malformed_packet.py $HOST_MAC 6 &
+    sleep 0.5
+    count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
+    count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
+    if [ $count_recived -ne 0 and $count_sent -le 0 ]; then
+        echo "Malformed packet1 error - not droped or not send"
+        return 1
+    else
+        echo "Malformed packet1 droped from veth-host as expected"
+    fi
+    truncate -s 0 recived.pcap
+    truncate -s 0 sent.pcap
     
+    sudo ./malformed_packet.py $HOST_MAC 7 &
+    sleep 0.5
+    count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
+    count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
+    if [ $count_recived -ne 0 and $count_sent -le 0 ]; then
+        echo "Malformed packet1 error - not droped or not send"
+        return 1
+    else
+        echo "Malformed packet1 droped from veth-host as expected"
+    fi
+    truncate -s 0 recived.pcap
+    truncate -s 0 sent.pcap
+
+    sudo kill $TCPDUMP_PID_NS
+    sudo kill $TCPDUMP_PID_HOST   
+    cleanup_netns 
 }
 
 
