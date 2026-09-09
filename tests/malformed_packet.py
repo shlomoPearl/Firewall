@@ -1,34 +1,33 @@
-from scapy.all import Ether, IP, ICMP, TCP, UDP, Raw, sendp, send
-import sys
-import time
+from scapy.all import Ether, IP, ICMP, TCP, UDP, Raw, sendp
+import sys, time
 
 dst_mac = sys.argv[1]
-dst_ip = "10.0.0.1"
-iface = "veth-ns"
-# packet 1: packet too short for Ethernet header
-packet = Ether(dst=dst_mac, type=0x0001)/Raw(load="short")
-sendp(packet, iface="veth-ns")
-time.sleep(1)
-# packet 2: packet too short for IP header
-packet = IP(dst="10.0.0.1", len=5)/ICMP()
-send(packet, iface="veth-ns")
-time.sleep(1)
-# packet 3: IHL field indicates a header length that is lower than the actual packet size
-packet = IP(dst="10.0.0.1", ihl=6)/ICMP()
-send(packet, iface="veth-ns")
-time.sleep(1)
-# packet 4: iph + iph_len exceeds the valid packet size
-packet = IP(dst="10.0.0.1", len=1000)/ICMP()
-send(packet, iface="veth-ns")
-time.sleep(1)
-# packet 5: TCP header length exceeds the valid packet size
-packet = IP(dst="10.0.0.1")/TCP(sport=1234, dport=9999, dataofs=1)/Raw(load="test")
-send(packet, iface="veth-ns")
-time.sleep(1)
-# packet 6 : tcp + tcp_len exceeds the valid packet size
-packet = IP(dst="10.0.0.1")/TCP(sport=1234, dport=9999, dataofs=15)/Raw(load="test")
-send(packet, iface="veth-ns")
-time.sleep(1)
-# packet 7: UDP header length exceeds the valid packet size
-packet = IP(dst="10.0.0.1")/UDP(sport=1234, dport=9999, len=1000)/Raw(load="test")
-send(packet, iface="veth-ns")
+IFACE = "veth-ns"
+TARGET = "10.0.0.1"
+
+def send_truncated(pkt, keep_bytes, label):
+    raw = bytes(pkt)[:keep_bytes]
+    print(f"{label}: sending {len(raw)} raw bytes")
+    sendp(raw, iface=IFACE)
+    time.sleep(1)
+
+# packet 1: too short for Ethernet header — genuine truncation, below 14 bytes
+send_truncated(Ether(dst=dst_mac)/IP(dst=TARGET)/ICMP(), 10, "too short for Ethernet")
+
+# packet 2: too short for IP header — genuine truncation, 14 + partial IP
+send_truncated(Ether(dst=dst_mac)/IP(dst=TARGET)/ICMP(), 24, "too short for IP header")
+
+# packet 4: IHL claims more than the real packet holds — field-based, no truncation needed
+pkt = Ether(dst=dst_mac)/IP(dst=TARGET, ihl=15)/ICMP()
+sendp(pkt, iface=IFACE); time.sleep(1)
+
+# packet 5: TCP doff too small (sanity check)
+pkt = Ether(dst=dst_mac)/IP(dst=TARGET)/TCP(sport=1234, dport=9999, dataofs=1)/Raw(load="test")
+sendp(pkt, iface=IFACE); time.sleep(1)
+
+# packet 6: TCP doff exceeds real size (bounds check)
+pkt = Ether(dst=dst_mac)/IP(dst=TARGET)/TCP(sport=1234, dport=9999, dataofs=15)/Raw(load="test")
+sendp(pkt, iface=IFACE); time.sleep(1)
+
+# packet 7: too short for UDP header — genuine truncation
+send_truncated(Ether(dst=dst_mac)/IP(dst=TARGET)/UDP(sport=1234, dport=9999)/Raw(load="x"), 38, "too short for UDP header")
