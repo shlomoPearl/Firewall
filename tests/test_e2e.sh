@@ -1,3 +1,4 @@
+RULES_FILE="rules.json"
 BLACK_PORT=9999
 ALLOWED_PORT=9090
 HOST_IP=10.0.0.1
@@ -83,149 +84,74 @@ test_SIGTERM_2_attached() {
     return $?
 }
 
-
-
-test_drop_filtering() {
-    echo "Testing packet filtering"
-    # test 1: ip drop (also tests default drop policy)
-    sudo ip netns exec fw-test ping -I $BLACK_IP -c 1 -W 1 $HOST_IP 
-    ping_status=$?
-    if [ $ping_status -eq 0 ]; then
-        echo "Ping from veth-host succeeded, but it should have been blocked"
+check_drop() {
+    if [ "$1" -eq 0 ]; then
+        echo "$2"
         return 1
     else
-        echo "Ping from veth-host failed as expected"
-    fi  
+        echo "$3"
+        return 0  
+    fi
+}
+
+test_drop_ip() {
+    success=0
+    # test 1: ip drop (also tests default drop policy)
+    sudo ip netns exec fw-test ping -I $BLACK_IP -c 1 -W 1 $HOST_IP 
+    check_drop $? "Ping from veth-host succeeded, but it should have been blocked" "Ping from veth-host failed as expected"
+    ((success +=$?))  
     # test 2: tcp ip drop
     nc -l -p $BLACK_PORT &
     sleep 1  # Give nc a moment to start listening
     sudo ip netns exec fw-test nc -s $BLACK_IP $HOST_IP $ALLOWED_PORT
-    nc_status=$?
-    if [ $nc_status -eq 0 ]; then
-        echo "Connection to $HOST_IP:$ALLOWED_PORT  succeeded, but it should have been blocked"
-        return 1
-    else
-        echo "Connection to $HOST_IP:$ALLOWED_PORT failed as expected"
-    fi
+    check_drop $? "Connection to $HOST_IP:$ALLOWED_PORT succeeded, but it should have been blocked" "Connection to $HOST_IP:$ALLOWED_PORT failed as expected"
+    ((success += $?))  
     # test 3: udp ip drop
     sudo ip netns exec fw-test nc -s $BLACK_IP -u $HOST_IP $ALLOWED_PORT
-    nc_status=$?
-    if [ $nc_status -eq 0 ]; then
-        echo "Connection to $HOST_IP:$ALLOWED_PORT succeeded, but it should have been blocked"
-        return 1
-    else
-        echo "Connection to $HOST_IP:$ALLOWED_PORT failed as expected"
-    fi
+    check_drop $? "Connection to $HOST_IP:$ALLOWED_PORT succeeded, but it should have been blocked" "Connection to $HOST_IP:$ALLOWED_PORT failed as expected"
+    ((success += $?))  
+    return "$success"
+}
+
+test_drop_port() {
+    success=0
     # test 4: tcp port drop
     nc -l -p $BLACK_PORT &
     sleep 1  # Give nc a moment to start listening
     sudo ip netns exec fw-test-port nc -s $ALLOWED_IP $HOST_IP $BLACK_PORT
-    nc_status=$?
-    if [ $nc_status -eq 0 ]; then
-        echo "Connection to $HOST_IP:$BLACK_PORT succeeded, but it should have been blocked"
-        return 1
-    else
-        echo "Connection to $HOST_IP:$BLACK_PORT failed as expected"
-    fi
+    check_drop $? "Connection to $HOST_IP:$BLACK_PORT succeeded, but it should have been blocked" "Connection to $HOST_IP:$BLACK_PORT failed as expected"
+    ((success += $?))  
     # test 5: udp port drop
     sudo ip netns exec fw-test-port nc -s $ALLOWED_IP -u $HOST_IP $BLACK_PORT
-    nc_status=$?
-    if [ $nc_status -eq 0 ]; then
-        echo "Connection to $HOST_IP:$BLACK_PORT succeeded, but it should have been blocked"
-        return 1
-    else
-        echo "Connection to $HOST_IP:$BLACK_PORT failed as expected"
-    fi
+    check_drop $? "Connection to $HOST_IP:$BLACK_PORT succeeded, but it should have been blocked" "Connection to $HOST_IP:$BLACK_PORT failed as expected"
+    ((success += $?))  
+    return "$success"
+}
+
+test_drop_fragment() {
     # test 6: fragmented packet drop
     sudo ip netns exec fw-test-allowed hping3 -c 1 -d 20 --frag $HOST_IP
-    fragmented_status=$?
-    if [ $fragmented_status -eq 0 ]; then
-        echo "Fragmented packet from veth-host succeeded, but it should have been blocked"
-        return 1
-    else
-        echo "Fragmented packet from veth-host failed as expected"
-    fi
-    # test 7: malformed packet - TO-DO
+    check_drop $? "Fragmented packet from veth-host succeeded, but it should have been blocked" "Fragmented packet from veth-host failed as expected"
+    return $?
+}
+
+check_drop_malformed() {
     HOST_MAC=$(ip link show veth-host | awk '/link\/ether/ {print $2}')
     sudo ip netns exec fw-test tcpdump -i veth-ns -n -w sent.pcap &
     TCPDUMP_PID_NS=$!
     sudo tcpdump -i veth-host -n -w received.pcap &
     TCPDUMP_PID_HOST=$!
 
-    sudo ./malformed_packet.py "$HOST_MAC" 1 &
+    sudo ./malformed_packet.py "$HOST_MAC" "$1" &
     sleep 0.5
     count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
     count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
     if [[ "$count_recived" -ne 0 && "$count_sent" -le 0 ]]; then
-        echo "Malformed packet1 error - not droped or not send"
+        echo "Malformed packet$1 error - not droped or not send"
         return 1
     else
-        echo "Malformed packet1 droped from veth-host as expected"
-    fi
-    truncate -s 0 recived.pcap
-    truncate -s 0 sent.pcap
-
-    sudo ./malformed_packet.py "$HOST_MAC" 2 &
-    sleep 0.5
-    count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
-    count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
-    if [[ "$count_recived" -ne 0 && "$count_sent" -le 0 ]]; then
-        echo "Malformed packet1 error - not droped or not send"
-        return 1
-    else
-        echo "Malformed packet1 droped from veth-host as expected"
-    fi
-    truncate -s 0 recived.pcap
-    truncate -s 0 sent.pcap
-
-    sudo ./malformed_packet.py "$HOST_MAC" 4 &
-    sleep 0.5
-    count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
-    count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
-    if [[ "$count_recived" -ne 0 && "$count_sent" -le 0 ]]; then
-        echo "Malformed packet1 error - not droped or not send"
-        return 1
-    else
-        echo "Malformed packet1 droped from veth-host as expected"
-    fi
-    truncate -s 0 recived.pcap
-    truncate -s 0 sent.pcap
-
-    sudo ./malformed_packet.py "$HOST_MAC" 5 &
-    sleep 0.5
-    count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
-    count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
-    if [[ "$count_recived" -ne 0 && "$count_sent" -le 0 ]]; then
-        echo "Malformed packet1 error - not droped or not send"
-        return 1
-    else
-        echo "Malformed packet1 droped from veth-host as expected"
-    fi
-    truncate -s 0 recived.pcap
-    truncate -s 0 sent.pcap
-
-    sudo ./malformed_packet.py "$HOST_MAC" 6 &
-    sleep 0.5
-    count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
-    count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
-    if [[ "$count_recived" -ne 0 && "$count_sent" -le 0 ]]; then
-        echo "Malformed packet1 error - not droped or not send"
-        return 1
-    else
-        echo "Malformed packet1 droped from veth-host as expected"
-    fi
-    truncate -s 0 recived.pcap
-    truncate -s 0 sent.pcap
-
-    sudo ./malformed_packet.py "$HOST_MAC" 7 &
-    sleep 0.5
-    count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
-    count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
-    if [[ "$count_recived" -ne 0 && "$count_sent" -le 0 ]]; then
-        echo "Malformed packet1 error - not droped or not send"
-        return 1
-    else
-        echo "Malformed packet1 droped from veth-host as expected"
+        echo "Malformed packet$1 droped from veth-host as expected"
+        return 0
     fi
     truncate -s 0 recived.pcap
     truncate -s 0 sent.pcap
@@ -234,42 +160,61 @@ test_drop_filtering() {
     sudo kill $TCPDUMP_PID_HOST   
 }
 
+test_drop_malformed() {
+    # test 7: malformed packet
+    success=0
+    check_drop_malformed 1
+    ((success += "$?"))
+    check_drop_malformed 2
+    ((success += "$?"))
+    check_drop_malformed 4
+    ((success += "$?"))
+    check_drop_malformed 5
+    ((success += "$?"))
+    check_drop_malformed 6
+    ((success += "$?"))
+    check_drop_malformed 7
+    ((success += "$?"))
+    return "$success"
+}
 
-
-test_pass_filtering() {
-    #test 1: ip pass
-    sudo ip netns exec fw-test ping -c 1 -W 1 "$HOST_IP" 
-    ping_status=$?
-    if [ $ping_status -eq 1 ]; then
-        echo "Ping from veth-host unsucceeded, but it should have been pass"
+check_pass() {
+    if [ "$1" -ne 0 ]; then
+        echo "$2"
         return 1
     else
-        echo "Ping from veth-host pass as expected"
+        echo "$3"
     fi
+
+}
+
+test_pass() {
+    success=0
+    #test 1: ip pass
+    sudo ip netns exec fw-test ping -c 1 -W 1 "$HOST_IP" 
+    check_pass "$?" "Ping from veth-host unsucceeded, but it should have been pass" "Ping from veth-host unsucceeded, but it should have been pass"
+    ((success += "$?"))
     # test 2: tcp pass
     nc -l -p "$ALLOWED_PORT" &
     sleep 1  # Give nc a moment to start listening
     sudo ip netns exec fw-test nc "$HOST_IP" "$ALLOWED_PORT"
-    nc_status=$?
-    if [ $nc_status -ne 0 ]; then
-        echo "Connection to '$HOST_IP':'$ALLOWED_PORT' TCP unsucceeded, but it should have been pass"
-        return 1
-    else
-        echo "Connection to '$HOST_IP':'$ALLOWED_PORT' TCP pass as expected"
-    fi
-    # test 2: udp pass
+    check_pass "$?" "Connection to '$HOST_IP':'$ALLOWED_PORT' TCP unsucceeded, but it should have been pass" "Connection to '$HOST_IP':'$ALLOWED_PORT' TCP pass as expected"
+    ((success += "$?"))
+    # test 3: udp pass
     sudo ip netns exec fw-test nc -u "$HOST_IP" "$ALLOWED_IP"
-    nc_status=$?
-    if [ $nc_status -ne 0 ]; then
-        echo "Connection to '$HOST_IP':'$ALLOWED_PORT' UDP unsucceeded, but it should have been pass"
-        return 1
-    else
-        echo "Connection to '$HOST_IP':'$ALLOWED_PORT' UDP pass as expected"
-    fi
+    check_pass "$?" "Connection to '$HOST_IP':'$ALLOWED_PORT' UDP unsucceeded, but it should have been pass" "Connection to '$HOST_IP':'$ALLOWED_PORT' UDP pass as expected"
+    ((success += "$?"))
+    return "$success"
 }
 
-test_add_rules() {
-    echo ""
+test_add_ip_rule() {
+    jq '.ip_blacklist += ['"$1"']' "$RULES_FILE" > tmp.json && mv tmp.json "$RULES_FILE" 
+    sleep 1
+}
+
+test_add_port_rule() {
+    jq '.port_blacklist += ['"$1"']' "$RULES_FILE" > tmp.json && mv tmp.json "$RULES_FILE" 
+    sleep 1
 }
 
 total_test=0
@@ -287,14 +232,6 @@ check_status() {
     fi
 }
 
-summary() {
-    echo "TOTAL TESTS: $total_test"
-    echo "PASSED: $test_pass"
-    echo "FAILED: $test_fail"   
-    echo "TEST SUMMARY: $test_pass/$total_test tests passed, $test_fail/$total_test tests failed"
-    echo "AVG PASS: $(echo "scale=2; $test_pass/$total_test*100" | bc)%"
-    echo "AVG FAIL: $(echo "scale=2; $test_fail/$total_test*100" | bc)%"
-}
 
 test_runner() {
     setup_netns
@@ -308,15 +245,33 @@ test_runner() {
     test_SIGTERM_2_attached
     check_status $? "test_SIGTERM"
 
-    test_pass_filtering
-    check_status $? "test_pass_filtering"
+    test_drop_ip
+    check_status $? "test_drop_ip"
 
-    test_drop_filtering
-    check_status $? "test_drop_filtering"
+    test_drop_port
+    check_status $? "test_drop_port"
+
+    test_drop_fragment
+    check_status $? "test_drop_fragment"
+
+    test_drop_malformed
+    check_status $? "test_drop_malformed"
+
+    test_pass
+    check_status $? "test_pass_filtering"
 
     summary
     stop_firewall SIGINT
     cleanup_netns
 }
  
+summary() {
+    echo "TOTAL TESTS: $total_test"
+    echo "PASSED: $test_pass"
+    echo "FAILED: $test_fail"   
+    echo "TEST SUMMARY: $test_pass/$total_test tests passed, $test_fail/$total_test tests failed"
+    echo "AVG PASS: $(echo "scale=2; $test_pass/$total_test*100" | bc)%"
+    echo "AVG FAIL: $(echo "scale=2; $test_fail/$total_test*100" | bc)%"
+}
+
 trap cleanup_netns EXIT 
