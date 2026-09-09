@@ -1,17 +1,20 @@
 setup_netns() {
     # Create an isolated network namespace
     sudo ip netns add fw-test
-
-    # Create a veth pair — a virtual "cable" with two ends
+    
+    # Create a veth pair - a virtual "cable" with two ends
     sudo ip link add veth-host type veth peer name veth-ns
-
+    
     # Move one end into the namespace
     sudo ip link set veth-ns netns fw-test
-
+    
     # Assign IPs and bring both ends up
     sudo ip addr add 10.0.0.1/24 dev veth-host
     sudo ip link set veth-host up
+
     sudo ip netns exec fw-test ip addr add 10.0.0.2/24 dev veth-ns
+    sudo ip netns exec fw-test ip addr add 10.0.0.3/24 dev veth-ns
+    sudo ip netns exec fw-test ip addr add 10.0.0.4/24 dev veth-ns
     sudo ip netns exec fw-test ip link set veth-ns up
     sudo ip netns exec fw-test ip link set lo up
 }
@@ -23,17 +26,17 @@ cleanup_netns() {
 }
 
 start_firewall() {
-    make -C .. -f all
-    sudo ./firewall &
+    make -C .. all
+    sudo ./firewall veth-host &
 }
 
 stop_firewall() {
-    sudo pkill -$1 -f firewall
+    sudo pkill -$1 -f firewall 
 }
 
 test_attach() {
     echo "Testing attach/detach"
-    attached=$(sudo ip link show veth-host | grep "xdp_filter")
+    attached=$(sudo ip -d link show veth-host | grep "xdp_filter")
     if [ -n "$attached" ]; then
         return 0
     else
@@ -46,44 +49,135 @@ test_SIGINT_2_attached() {
     echo "Testing SIGINT handling"
     stop_firewall SIGINT
     sleep 1  # Give it a moment to clean up
-    attached=$(sudo ip link show veth-host | grep "xdp_filter")
-    if [ -z "$attached" ]; then
-        return 0
-    else
+    test_attach
+    attached=$?
+    if [ $attached -eq 0 ]; then
         echo "XDP program is STILL attached after SIGINT"
         return 1
     fi
     start_firewall
+    sleep 1
     test_attach
-    attached=$?
-    if [ $attached -ne 0 ]; then
-        echo "XDP program is NOT attached after SIGINT restart"
-        return 1
-    fi
-    return 0
+    return $?
 }
 
 test_SIGTERM_2_attached() {
     echo "Testing SIGTERM handling"
     stop_firewall SIGTERM  
     sleep 1  # Give it a moment to clean up
-    attached=$(sudo ip link show veth-host | grep "xdp_filter")
-    if [ -z "$attached" ]; then
-        return 0
-    else
+    test_attach
+    attached=$?
+    if [ $attached -eq 0 ]; then
         echo "XDP program is STILL attached after SIGTERM"
         return 1
     fi  
     start_firewall
+    sleep 1
     test_attach
-    attached=$?
-    if [ $attached -ne 0 ]; then
-        echo "XDP program is NOT attached after SIGTERM restart"
-        return 1
-    fi
-    return 0
+    return $?
 }
 
 
+test_drop_filtering() {
+    echo "Testing packet filtering"
+    # test 1: ip drop (also tests default drop policy)
+    sudo ip netns exec fw-test ping -I 10.0.0.2 -c 1 -W 1 10.0.0.1 
+    ping_status=$?
+    if [ $ping_status -eq 0 ]; then
+        echo "Ping from veth-host succeeded, but it should have been blocked"
+        return 1
+    else
+        echo "Ping from veth-host failed as expected"
+    fi  
+    # test 2: tcp ip drop
+    nc -l -p 9090 &
+    sleep 1  # Give nc a moment to start listening
+    sudo ip netns exec fw-test nc -s 10.0.0.2 10.0.0.1 9090
+    nc_status=$?
+    if [ $nc_status -eq 0 ]; then
+        echo "Connection to 10.0.0.1:9090  succeeded, but it should have been blocked"
+        return 1
+    else
+        echo "Connection to 10.0.0.1:9090 failed as expected"
+    fi
+    # test 3: udp ip drop
+    sudo ip netns exec fw-test nc -s 10.0.0.2 -u 10.0.0.1 9090
+    nc_status=$?
+    if [ $nc_status -eq 0 ]; then
+        echo "Connection to 10.0.0.1:9090  succeeded, but it should have been blocked"
+        return 1
+    else
+        echo "Connection to 10.0.0.1:9090 failed as expected"
+    fi
+    # test 4: tcp port drop
+    nc -l -p 9999 &
+    sleep 1  # Give nc a moment to start listening
+    sudo ip netns exec fw-test-port nc -s 10.0.0.3 10.0.0.1 9999
+    nc_status=$?
+    if [ $nc_status -eq 0 ]; then
+        echo "Connection to 10.0.0.1:9999 succeeded, but it should have been blocked"
+        return 1
+    else
+        echo "Connection to 10.0.0.1:9999 failed as expected"
+    fi
+    # test 5: udp port drop
+    sudo ip netns exec fw-test-port nc -s 10.0.0.3 -u 10.0.0.1 9999
+    nc_status=$?
+    if [ $nc_status -eq 0 ]; then
+        echo "Connection to 10.0.0.1:9999 succeeded, but it should have been blocked"
+        return 1
+    else
+        echo "Connection to 10.0.0.1:9999 failed as expected"
+    fi
+    # test 6: fragmented packet drop
+    sudo ip netns exec fw-test-allowed hping3 -c 1 -d 20 --frag 10.0.0.1
+    fragmented_status=$?
+    if [ $fragmented_status -eq 0 ]; then
+        echo "Fragmented packet from veth-host succeeded, but it should have been blocked"
+        return 1
+    else
+        echo "Fragmented packet from veth-host failed as expected"
+    fi
+    # test 7: malformed packet - TO-DO
+    HOST_MAC=$(ip link show veth-host | awk '/link\/ether/ {print $2}')
+    sudo tcpdump -i veth-ns -w sent.pcap &
+    sudo tcpdump -i veth-host -w received.pcap &
+    sudo ./malformed_packet.py $HOST_MAC
+    
+}
+
+
+
+test_pass_filtering() {
+    #test 1: ip pass
+    sudo ip netns exec fw-test ping -c 1 -W 1 10.0.0.1 
+    ping_status=$?
+    if [ $ping_status -eq 1 ]; then
+        echo "Ping from veth-host unsucceeded, but it should have been pass"
+        return 1
+    else
+        echo "Ping from veth-host pass as expected"
+    fi
+    # test 2: tcp pass
+    nc -l -p 9999 &
+    sleep 1  # Give nc a moment to start listening
+    sudo ip netns exec fw-test nc 10.0.0.1 9999
+    nc_status=$?
+    if [ $nc_status -ne 0 ]; then
+        echo "Connection to 10.0.0.1:9999 TCP unsucceeded, but it should have been pass"
+        return 1
+    else
+        echo "Connection to 10.0.0.1:9999 TCP pass as expected"
+    fi
+    # test 2: udp pass
+    sudo ip netns exec fw-test nc -u 10.0.0.1 9999
+    nc_status=$?
+    if [ $nc_status -ne 0 ]; then
+        echo "Connection to 10.0.0.1:9999 UDP unsucceeded, but it should have been pass"
+        return 1
+    else
+        echo "Connection to 10.0.0.1:9999 UDP pass as expected"
+    fi
+}
  
 trap cleanup_netns EXIT 
