@@ -7,6 +7,8 @@ APP    := firewall
 TEST_PARSER  := test_parser_runner
 TEST_INOTIFY := test_inotify_runner
 TEST_XDP := test_xdp_filter_runner
+TEST_INTEGRATION_SCRIPT := tests/netns_test.sh
+
 
 BPF_OBJ := $(OUTPUT)/firewall.bpf.o
 SKEL    := $(OUTPUT)/firewall.skel.h
@@ -96,7 +98,11 @@ run_inotify_test: $(TEST_INOTIFY)
 
 run_xdp_test: $(TEST_XDP) $(BPF_OBJ)
 	sudo ./$(TEST_XDP) $(BPF_OBJ)
-run_all_tests: run_parser_test run_inotify_test run_xdp_test
+
+run_integration_test: $(APP) $(BPF_OBJ)
+	sudo bash $(TEST_INTEGRATION_SCRIPT)
+
+run_all_tests: run_parser_test run_inotify_test run_xdp_test run_integration_test
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -113,9 +119,9 @@ clean:
 
 clean_tests:
 	@echo "  CLEAN   test binaries and objects"
-	rm -f $(TEST_PARSER) $(TEST_INOTIFY) $(TEST_XDP) *.o lib/*.o tests/*.o
+	rm -f $(TEST_PARSER) $(TEST_INOTIFY) $(TEST_XDP) $(APP)  *.o lib/*.o tests/*.o
 
 clean_all: clean clean_tests
 
 .PHONY: all clean clean_tests clean_all \
-        run_parser_test run_inotify_test run_xdp_test run_all_tests
+        run_parser_test run_inotify_test run_xdp_test run_integration_test run_all_tests

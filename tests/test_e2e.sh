@@ -35,7 +35,6 @@ cleanup_netns() {
 }
 
 start_firewall() {
-    make -C .. all
     sudo ./firewall veth-host test &
 }
 
