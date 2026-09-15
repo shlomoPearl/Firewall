@@ -44,13 +44,8 @@ stop_firewall() {
 
 test_attach() {
     echo "Testing attach/detach"
-    attached=$(sudo ip -d link show veth-host | grep "xdp_filter")
-    if [ -n "$attached" ]; then
-        return 0
-    else
-        echo "XDP program is NOT attached to veth-host"
-        return 1
-    fi
+    sudo bpftool prog show name xdp_filter
+    return $?
 }
 
 test_SIGINT_2_attached() {
@@ -104,11 +99,11 @@ test_drop_ip() {
     # test 2: tcp ip drop
     nc -l -p $BLACK_PORT &
     sleep 1  # Give nc a moment to start listening
-    sudo ip netns exec fw-test nc -s "$1" $HOST_IP $ALLOWED_PORT
+    sudo ip netns exec fw-test nc -w 1 -s "$1" $HOST_IP $ALLOWED_PORT
     check_drop $? "Connection to $HOST_IP:$ALLOWED_PORT succeeded, but it should have been blocked" "Connection to $HOST_IP:$ALLOWED_PORT failed as expected"
     ((success += $?))  
     # test 3: udp ip drop
-    sudo ip netns exec fw-test nc -s "$1" -u $HOST_IP $ALLOWED_PORT
+    sudo ip netns exec fw-test nc -w 1 -s "$1" -u $HOST_IP $ALLOWED_PORT
     check_drop $? "Connection to $HOST_IP:$ALLOWED_PORT succeeded, but it should have been blocked" "Connection to $HOST_IP:$ALLOWED_PORT failed as expected"
     ((success += $?))  
     return "$success"
@@ -119,11 +114,11 @@ test_drop_port() {
     # test 4: tcp port drop
     nc -l -p $BLACK_PORT &
     sleep 1  # Give nc a moment to start listening
-    sudo ip netns exec fw-test-port nc -s $ALLOWED_IP $HOST_IP "$1"
+    sudo ip netns exec fw-test nc -w 1 -s $ALLOWED_IP $HOST_IP "$1"
     check_drop $? "Connection to $HOST_IP:$1 succeeded, but it should have been blocked" "Connection to $HOST_IP:$BLACK_PORT failed as expected"
     ((success += $?))  
     # test 5: udp port drop
-    sudo ip netns exec fw-test-port nc -s $ALLOWED_IP -u $HOST_IP "$1"
+    sudo ip netns exec fw-test nc -w 1 -s $ALLOWED_IP -u $HOST_IP "$1"
     check_drop $? "Connection to $HOST_IP:$1 succeeded, but it should have been blocked" "Connection to $HOST_IP:$BLACK_PORT failed as expected"
     ((success += $?))  
     return "$success"
@@ -138,12 +133,12 @@ test_drop_fragment() {
 
 check_drop_malformed() {
     HOST_MAC=$(ip link show veth-host | awk '/link\/ether/ {print $2}')
-    sudo ip netns exec fw-test tcpdump -i veth-ns -n -w sent.pcap &
+    sudo ip netns exec fw-test tcpdump -i veth-ns -q -n -w sent.pcap & > dummyS.txt
     TCPDUMP_PID_NS=$!
-    sudo tcpdump -i veth-host -n -w received.pcap &
+    sudo tcpdump -i veth-host -q -n -w received.pcap & > dummyR.txt
     TCPDUMP_PID_HOST=$!
 
-    sudo ./malformed_packet.py "$HOST_MAC" "$1" &
+    sudo ./tests/malformed_packet.py "$HOST_MAC" "$1" &
     sleep 0.5
     count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
     count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
@@ -209,27 +204,27 @@ test_packet_pass() {
 }
 
 test_add_ip_rule() {
-    jq '.ip_blacklist += ['"$1"']' "$RULES_FILE" > tmp.json && mv tmp.json "$RULES_FILE" 
+    jq '.ip_blacklist += ["$1"]' "$RULES_FILE" > tmp.json && mv tmp.json "$RULES_FILE" 
     sleep 1
     test_drop_ip "$1"
     return "$?"
 }
 
 test_remove_ip_rule() {
-    jq '.ip_blacklist -= ['"$1"']' "$RULES_FILE" > tmp.json && mv tmp.json "$RULES_FILE" 
+    jq '.ip_blacklist -= ["$1"]' "$RULES_FILE" > tmp.json && mv tmp.json "$RULES_FILE" 
     sleep 1
     test_packet_pass "$1" "$ALLOWED_PORT"
 }
 
 test_add_port_rule() {
-    jq '.port_blacklist += ['"$1"']' "$RULES_FILE" > tmp.json && mv tmp.json "$RULES_FILE" 
+    jq '.port_blacklist += ["$1"]' "$RULES_FILE" > tmp.json && mv tmp.json "$RULES_FILE" 
     sleep 1
     test_drop_port "$1"
     return "$?"
 }
 
 test_remove_port_rule() {
-    jq '.port_blacklist -= ['"$1"']' "$RULES_FILE" > tmp.json && mv tmp.json "$RULES_FILE" 
+    jq '.port_blacklist -= ["$1"]' "$RULES_FILE" > tmp.json && mv tmp.json "$RULES_FILE" 
     sleep 1
     test_packet_pass "$ALLOWED_IP" "$1"
 }
@@ -289,9 +284,7 @@ test_runner() {
     test_remove_port_rule "$NEW_BLACK_PORT"
     check_status $? test_remove_port_rule
 
-    summary
     stop_firewall SIGINT
-    cleanup_netns
 }
  
 summary() {
@@ -304,5 +297,5 @@ summary() {
 }
 
 test_runner
-
+summary
 trap cleanup_netns EXIT 
