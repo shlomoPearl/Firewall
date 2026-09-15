@@ -7,7 +7,7 @@ APP    := firewall
 TEST_PARSER  := test_parser_runner
 TEST_INOTIFY := test_inotify_runner
 TEST_XDP := test_xdp_filter_runner
-TEST_INTEGRATION_SCRIPT := tests/netns_test.sh
+TEST_INTEGRATION_SCRIPT := tests/test_integration.sh
 
 
 BPF_OBJ := $(OUTPUT)/firewall.bpf.o

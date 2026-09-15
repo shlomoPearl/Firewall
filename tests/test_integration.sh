@@ -303,4 +303,6 @@ summary() {
     echo "AVG FAIL: $(echo "scale=2; $test_fail/$total_test*100" | bc)%"
 }
 
+test_runner
+
 trap cleanup_netns EXIT 

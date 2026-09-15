@@ -4,5 +4,5 @@
 #include <stdio.h>
 #include "config.h"
 
-int setup_inotify();
+int setup_inotify(const char*);
 int watch_rules_changes(int inotify_fd);

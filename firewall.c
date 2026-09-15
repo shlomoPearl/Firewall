@@ -36,9 +36,9 @@ int main(int argc, char **argv) {
     }
     char * rules_file;
     if (!strcmp(rules_file_mod, "test")){
-        rules_file = TEST_RULES_FILE
+        rules_file = TEST_RULES_FILE;
     } else {
-        rules_file = RULES_FILE
+        rules_file = RULES_FILE;
     }
 
     /* Open and load BPF application */
