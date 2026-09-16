@@ -44,7 +44,7 @@ stop_firewall() {
 
 test_attach() {
     echo "Testing attach/detach"
-    sudo bpftool prog show name xdp_filter
+    sudo bpftool prog show name xdp_filter > /dev/null
     return $?
 }
 
@@ -133,12 +133,12 @@ test_drop_fragment() {
 
 check_drop_malformed() {
     HOST_MAC=$(ip link show veth-host | awk '/link\/ether/ {print $2}')
-    sudo ip netns exec fw-test tcpdump -i veth-ns -q -n -w sent.pcap & > dummyS.txt
+    sudo ip netns exec fw-test tcpdump -i veth-ns -n -w sent.pcap > /dev/null 2>&1 & 
     TCPDUMP_PID_NS=$!
-    sudo tcpdump -i veth-host -q -n -w received.pcap & > dummyR.txt
+    sudo tcpdump -i veth-host -n -w received.pcap > /dev/null 2>&1 & 
     TCPDUMP_PID_HOST=$!
 
-    sudo ./tests/malformed_packet.py "$HOST_MAC" "$1" &
+    sudo python3 tests/malformed_packet.py "$HOST_MAC" "$1" &
     sleep 0.5
     count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
     count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
@@ -154,6 +154,7 @@ check_drop_malformed() {
 
     sudo kill $TCPDUMP_PID_NS
     sudo kill $TCPDUMP_PID_HOST   
+    sleep 1
 }
 
 test_drop_malformed() {
