@@ -1,21 +1,35 @@
 #include "firewall.h"
 
 int running = 1;
+int err;
+cJSON* rules_json;
+struct firewall_bpf *skel;
 
 void handle_signal(int sig) {
     printf("Received signal %d, exiting...\n", sig);
-    running = 0;
+    cJSON_Delete(rules_json);
+    bpf_link__destroy(skel->links.xdp_filter);
+    firewall_bpf__destroy(skel);
+    exit(1);
+    // return err;
+    // goto cleanup;
+    // running = 0;
+}
+
+void stop(){
+    printf("EXIT...\n", sig);
+    bpf_link__destroy(skel->links.xdp_filter);
+    firewall_bpf__destroy(skel);
+    exit(1);
 }
 
 
 int main(int argc, char **argv) {
     signal(SIGINT, handle_signal);
     signal(SIGTERM, handle_signal);
-    struct firewall_bpf *skel;
     struct bpf_map *ip_map = NULL;
     struct bpf_map *port_map = NULL;
     int ifindex;
-    int err;
 
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <ifname>\n <prod/test>", argv[0]);
@@ -54,7 +68,7 @@ int main(int argc, char **argv) {
     if (err)
     {
         fprintf(stderr, "Failed to load and verify BPF skeleton: %d\n", err);
-        goto cleanup;
+        stop();
     }
 
     /* Attach XDP program */
@@ -62,7 +76,7 @@ int main(int argc, char **argv) {
     if (err)
     {
         fprintf(stderr, "Failed to attach BPF skeleton: %d\n", err);
-        goto cleanup;
+        stop();
     }
 
     /* Attach the XDP program to the specified interface */
@@ -71,7 +85,7 @@ int main(int argc, char **argv) {
     {
         err = -errno;
         fprintf(stderr, "Failed to attach XDP program: %s\n", strerror(errno));
-        goto cleanup;
+        stop();
     }
 
     printf("Successfully attached XDP program to interface %s\n", ifname);
@@ -83,28 +97,28 @@ int main(int argc, char **argv) {
     {
         fprintf(stderr, "Failed to find ip/port_map\n");
         err = -1;
-        goto cleanup;
+        stop();
     }
 
     // first load the rules from the file
-    cJSON* rules_json = setup_json(rules_file);
+    rules_json = setup_json(rules_file);
     if (rules_json == NULL) {
         fprintf(stderr, "Failed to set up JSON rules\n");
         err = -1;
         cJSON_Delete(rules_json);
-        goto cleanup;
+        stop();
     }
     if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), ip_map) != 0) {
         fprintf(stderr, "Failed to populate ip_map from JSON rules\n");
         err = -1;
         cJSON_Delete(rules_json);
-        goto cleanup;
+        stop();
     }
     if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), port_map) != 0) {
         fprintf(stderr, "Failed to populate port_map from JSON rules\n");
         err = -1;
         cJSON_Delete(rules_json);
-        goto cleanup;
+        stop();
     }
 
     int inotify_fd = setup_inotify(rules_file);
@@ -112,7 +126,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to set up inotify\n");
         err = -1;
         cJSON_Delete(rules_json);
-        goto cleanup;
+        stop();
     }
 
     while (running) {
@@ -135,9 +149,4 @@ int main(int argc, char **argv) {
             cJSON_Delete(rules_json);
         }
     }
-
-    cleanup:
-        bpf_link__destroy(skel->links.xdp_filter);
-        firewall_bpf__destroy(skel);
-        return -err;
 }
