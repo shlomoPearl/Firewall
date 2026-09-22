@@ -143,19 +143,18 @@ check_drop_malformed() {
     sleep 0.5
     count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
     count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
+    success=0
     if [[ "$count_recived" -ne 0 && "$count_sent" -le 0 ]]; then
         echo "Malformed packet$1 error - not droped or not send"
-        return 1
+        success=1
     else
         echo "Malformed packet$1 droped from veth-host as expected"
-        return 0
     fi
-    truncate -s 0 recived.pcap
-    truncate -s 0 sent.pcap
-
-    sudo kill $TCPDUMP_PID_NS
-    sudo kill $TCPDUMP_PID_HOST   
-    sleep 1
+    sudo kill "$TCPDUMP_PID_HOST" "$TCPDUMP_PID_NS" 2>/dev/null
+    wait "$TCPDUMP_PID_HOST" "$TCPDUMP_PID_NS" 2>/dev/null
+    > sent.pcap
+    > received.pcap
+    return "$success"
 }
 
 test_drop_malformed() {

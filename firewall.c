@@ -11,13 +11,10 @@ void handle_signal(int sig) {
     bpf_link__destroy(skel->links.xdp_filter);
     firewall_bpf__destroy(skel);
     exit(1);
-    // return err;
-    // goto cleanup;
-    // running = 0;
 }
 
 void stop(){
-    printf("EXIT...\n", sig);
+    printf("EXIT...\n");
     bpf_link__destroy(skel->links.xdp_filter);
     firewall_bpf__destroy(skel);
     exit(1);
