@@ -81,6 +81,26 @@ test_SIGTERM_2_attached() {
     return $?
 }
 
+test_conn() {
+    local proto="$1" src_ip="$2" dst_ip="$3" port="$4"
+    if [ "$proto" = "udp" ]; then
+    	nc -u -l -p "$port" &
+    else
+	nc -l -p "$port" &
+    fi
+    local listener_pid=$!
+    sleep 0.5
+    if [ "$proto" = "udp" ]; then
+	sudo ip netns exec fw-test nc -uz -w 1 -s "$src_ip" "$dst_ip" "$port"  
+    else
+	sudo ip netns exec fw-test nc -z -w 1 -s "$src_ip" "$dst_ip" "$port"
+    fi
+    local result=$?
+    kill "$listener_pid" 2>/dev/null
+    wait "$listener_pid" 2>/dev/null
+    return "$result"
+}
+
 check_drop() {
     if [ "$1" -eq 0 ]; then
         echo "$2"
@@ -92,36 +112,40 @@ check_drop() {
 }
 
 test_drop_ip() {
-    success=0
-    echo "test 1: ip drop (also tests default drop policy)"
-    sudo ip netns exec fw-test ping -I "$1" -c 1 -W 1 $HOST_IP > /dev/null 2>&1
-    check_drop $? "Ping from veth-host succeeded, but it should have been blocked" "Ping from veth-host failed as expected"
+    local src_ip="$1"
+    local success=0
+    echo "test: ip drop ICMP"
+    sudo ip netns exec fw-test ping -I "$src_ip" -c 1 -W 1 $HOST_IP > /dev/null 2>&1
+    check_drop $? "Ping from $src_ip succeeded, but it should have been blocked" "Ping from $src_ip blockeed as expected"
     ((success +=$?))  
-    echo "test 2: tcp ip drop"
-    nc -l -p $BLACK_PORT &
-    sleep 1  # Give nc a moment to start listening
-    sudo ip netns exec fw-test nc -w 1 -z -s "$1" $HOST_IP $ALLOWED_PORT
-    check_drop $? "Connection to $HOST_IP:$ALLOWED_PORT succeeded, but it should have been blocked" "Connection to $HOST_IP:$ALLOWED_PORT failed as expected"
+
+    echo "test: ip drop - TCP"
+    test_conn tcp "$src_ip" "$HOST_IP" "$ALLOWED_PORT"
+    check_drop $? "TCP from $src_ip succeeded, but it should have been blocked" "TCP from $src_ip blocked as expected"
     ((success += $?))  
-    echo "test 3: udp ip drop"
-    sudo ip netns exec fw-test nc -uz -s "$1" $HOST_IP $ALLOWED_PORT
-    check_drop $? "Connection to $HOST_IP:$ALLOWED_PORT succeeded, but it should have been blocked" "Connection to $HOST_IP:$ALLOWED_PORT failed as expected"
-    ((success += $?))  
+
+    echo "test: ip drop - UDP"
+    test_conn udp "$src_ip" "$HOST_IP" "$ALLOWED_PORT"
+    check_drop $? "UDP from $src_ip succeeded, but it should have been blocked" "UDP from $src_ip blocked as expected"
+    ((success += $?))
+  
     return "$success"
 }
 
 test_drop_port() {
-    success=0
-    # test 4: tcp port drop
-    nc -l -p $BLACK_PORT &
-    sleep 1  # Give nc a moment to start listening
-    sudo ip netns exec fw-test nc -z -w 1 -s $ALLOWED_IP $HOST_IP "$1"
-    check_drop $? "Connection to $HOST_IP:$1 succeeded, but it should have been blocked" "Connection to $HOST_IP:$BLACK_PORT failed as expected"
+    local port="$1"
+    local success=0
+
+    echo test: port drop - TCP
+    test_conn tcp "$ALLOWED_IP" "$HOST_IP" "$port"
+    check_drop $? "TCP to port $port succeeded, should have been blocked" "TCP to port $port blocked as expected"
     ((success += $?))  
-    # test 5: udp port drop
-    sudo ip netns exec fw-test nc -uz -w 1 -s $ALLOWED_IP $HOST_IP "$1"
-    check_drop $? "Connection to $HOST_IP:$1 succeeded, but it should have been blocked" "Connection to $HOST_IP:$BLACK_PORT failed as expected"
+
+    echo test: port drop - UDP
+    test_conn udp "$ALLOWED_IP" "$HOST_IP" "$port"
+    check_drop $? "UDP to port $port succeeded, should have been blocked" "UDP to port $port blocked as expected"
     ((success += $?))  
+
     return "$success"
 }
 
@@ -186,21 +210,23 @@ check_pass() {
 }
 
 test_packet_pass() {
-    success=0
-    #test 1: ip pass
-    sudo ip netns exec fw-test ping -c 1 -W 1 -I "$1" "$HOST_IP" > /dev/null 2>&1
-    check_pass "$?" "Ping from veth-host unsucceeded, but it should have been pass" "Ping from veth-host unsucceeded, but it should have been pass"
+    local src_ip="$1" port="$2"
+    local success=0
+    echo "test: pass ICMP"
+    sudo ip netns exec fw-test ping -c 1 -W 1 -I "$src_ip" "$HOST_IP" > /dev/null 2>&1
+    check_pass "$?" "Ping from $src_ip failed, should have passed" "Ping from $src_ip passed as expected"
     ((success += "$?"))
-    # test 2: tcp pass
-    nc -l -p "$ALLOWED_PORT" &
-    sleep 1  # Give nc a moment to start listening
-    sudo ip netns exec fw-test nc -z -w 1 "$HOST_IP" "$2"
-    check_pass "$?" "Connection to '$HOST_IP':'$2' TCP unsucceeded, but it should have been pass" "Connection to '$HOST_IP':'$ALLOWED_PORT' TCP pass as expected"
+
+    echo "test: pass - TCP"
+    test_conn tcp "$src_ip" "$HOST_IP" "$port"
+    check_pass "$?" "TCP from $src_ip:$port falied, should have passed" "TCP from $src_ip:$port passed as expected"
     ((success += "$?"))
-    # test 3: udp pass
-    sudo ip netns exec fw-test nc -uz -w 1 "$HOST_IP" "$2"
-    check_pass "$?" "Connection to '$HOST_IP':'$2' UDP unsucceeded, but it should have been pass" "Connection to '$HOST_IP':'$ALLOWED_PORT' UDP pass as expected"
+
+    echo "test: pass - UDP"
+    test_conn udp "$src_ip" "$HOST_IP" "$port"
+    check_pass "$?" "UDP from $src_ip:$port failed shuold have passed" "UDP from $src_ip:$port passed as expected"
     ((success += "$?"))
+
     return "$success"
 }
 
