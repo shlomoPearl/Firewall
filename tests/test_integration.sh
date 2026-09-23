@@ -1,6 +1,6 @@
 RULES_FILE="tests/test_rules.json"
 BLACK_PORT=9999
-NEW_BLACK_PORT=9090
+NEW_BLACK_PORT=9091
 ALLOWED_PORT=9090
 HOST_IP=10.0.0.1
 BLACK_IP=10.0.0.2
@@ -23,23 +23,26 @@ setup_netns() {
 
     sudo ip netns exec fw-test ip addr add "$BLACK_IP"/24 dev veth-ns # blocked ip
     sudo ip netns exec fw-test ip addr add "$ALLOWED_IP"/24 dev veth-ns # allowed ip
+    sudo ip netns exec fw-test ip addr add "$NEW_BLACK_IP"/24 dev veth-ns
     sudo ip netns exec fw-test ip link set veth-ns up
     sudo ip netns exec fw-test ip link set lo up
 }
 
-cleanup_netns() {
+cleanup() {
     # Delete the veth pair and the network namespace
     sudo ip netns del fw-test 2>/dev/null
     sudo ip link del veth-host 2>/dev/null  # veth-ns is destroyed automatically with it
     rm -- *.pcap 2>/dev/null
+    pkill firewall  
 }
 
 start_firewall() {
     sudo ./firewall veth-host test &
+    FIREWALL_PID=$!
 }
 
 stop_firewall() {
-    sudo pkill "-$1" -f firewall 
+    sudo kill -"$1" "$FIREWALL_PID" 
 }
 
 test_attach() {
@@ -81,24 +84,40 @@ test_SIGTERM_2_attached() {
     return $?
 }
 
-test_conn() {
-    local proto="$1" src_ip="$2" dst_ip="$3" port="$4"
-    if [ "$proto" = "udp" ]; then
-    	nc -u -l -p "$port" &
-    else
-	nc -l -p "$port" &
-    fi
+test_tcp_conn() {
+    local src_ip="$1" dst_ip="$2" port="$3"
+    nc -l -p "$port" &
     local listener_pid=$!
     sleep 0.5
-    if [ "$proto" = "udp" ]; then
-	sudo ip netns exec fw-test nc -uz -w 1 -s "$src_ip" "$dst_ip" "$port"  
-    else
-	sudo ip netns exec fw-test nc -z -w 1 -s "$src_ip" "$dst_ip" "$port"
-    fi
+    sudo ip netns exec fw-test nc -z -w 1 -s "$src_ip" "$dst_ip" "$port"
     local result=$?
     kill "$listener_pid" 2>/dev/null
     wait "$listener_pid" 2>/dev/null
     return "$result"
+}
+
+test_udp_conn() {
+    local src_ip="$1" dst_ip="$2" port="$3"
+    sudo ip netns exec fw-test tcpdump -i veth-ns -n -w udp_sent.pcap > /dev/null 2>&1 &
+    local tcpdump_ns=$!
+    sudo tcpdump -i veth-host -n "udp and port $port" -w udp_received.pcap > /dev/null 2>&1 &
+    local tcpdump_host=$!
+    sleep 0.5
+    echo "probe" | sudo ip netns exec fw-test nc -u -w 1 -s "$src_ip" "$dst_ip" "$port"
+    sleep 0.5
+    sudo kill "$tcpdump_ns" "$tcpdump_host" 2>/dev/null
+    wait "$tcpdump_ns" "$tcpdump_host" 2>/dev/null
+
+    local sent received
+    sent=$(tcpdump -r udp_sent.pcap -n 2>/dev/null | wc -l)
+    received=$(tcpdump -r udp_received.pcap -n 2>/dev/null | wc -l)
+    > udp_sent.pcap
+    > udp_received.pcap 
+    if [[ "$sent" -gt 0 && "$received" -eq 0 ]]; then
+	return 1 # dropped
+    else
+	return 0 # passed
+    fi
 }
 
 check_drop() {
@@ -120,12 +139,12 @@ test_drop_ip() {
     ((success +=$?))  
 
     echo "test: ip drop - TCP"
-    test_conn tcp "$src_ip" "$HOST_IP" "$ALLOWED_PORT"
+    test_tcp_conn "$src_ip" "$HOST_IP" "$ALLOWED_PORT"
     check_drop $? "TCP from $src_ip succeeded, but it should have been blocked" "TCP from $src_ip blocked as expected"
     ((success += $?))  
 
     echo "test: ip drop - UDP"
-    test_conn udp "$src_ip" "$HOST_IP" "$ALLOWED_PORT"
+    test_udp_conn "$src_ip" "$HOST_IP" "$ALLOWED_PORT"
     check_drop $? "UDP from $src_ip succeeded, but it should have been blocked" "UDP from $src_ip blocked as expected"
     ((success += $?))
   
@@ -137,12 +156,12 @@ test_drop_port() {
     local success=0
 
     echo test: port drop - TCP
-    test_conn tcp "$ALLOWED_IP" "$HOST_IP" "$port"
+    test_tcp_conn "$ALLOWED_IP" "$HOST_IP" "$port"
     check_drop $? "TCP to port $port succeeded, should have been blocked" "TCP to port $port blocked as expected"
     ((success += $?))  
 
     echo test: port drop - UDP
-    test_conn udp "$ALLOWED_IP" "$HOST_IP" "$port"
+    test_udp_conn "$ALLOWED_IP" "$HOST_IP" "$port"
     check_drop $? "UDP to port $port succeeded, should have been blocked" "UDP to port $port blocked as expected"
     ((success += $?))  
 
@@ -218,12 +237,12 @@ test_packet_pass() {
     ((success += "$?"))
 
     echo "test: pass - TCP"
-    test_conn tcp "$src_ip" "$HOST_IP" "$port"
+    test_tcp_conn "$src_ip" "$HOST_IP" "$port"
     check_pass "$?" "TCP from $src_ip:$port falied, should have passed" "TCP from $src_ip:$port passed as expected"
     ((success += "$?"))
 
     echo "test: pass - UDP"
-    test_conn udp "$src_ip" "$HOST_IP" "$port"
+    test_udp_conn "$src_ip" "$HOST_IP" "$port"
     check_pass "$?" "UDP from $src_ip:$port failed shuold have passed" "UDP from $src_ip:$port passed as expected"
     ((success += "$?"))
 
@@ -323,7 +342,7 @@ summary() {
     echo "AVG FAIL: $(echo "scale=2; $test_fail/$total_test*100" | bc)%"
 }
 
-cleanup_netns
+cleanup
 test_runner
 summary
-trap cleanup_netns EXIT 
+trap cleanup EXIT 
