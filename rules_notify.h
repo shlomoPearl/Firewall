@@ -2,6 +2,8 @@
 #include <sys/inotify.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <libgen.h>
+#include <string.h>
 #include "config.h"
 
 int setup_inotify(const char*);
