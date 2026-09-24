@@ -14,9 +14,6 @@ int setup_inotify(const char* rules_file) {
     char *dir = dirname(dir_buf);
     char *base = basename(base_buf);
     strncpy(g_watched_name, base, sizeof(g_watched_name) - 1);
-    printf("dir - %s\n", dir);
-    printf("base - %s\n", base);
-    printf("g - %s\n", g_watched_name);
     int watch_descriptor = inotify_add_watch(inotify_fd, dir, IN_CLOSE_WRITE | IN_MOVED_TO);
     if (watch_descriptor < 0) {
         perror("inotify_add_watch");
