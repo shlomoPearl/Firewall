@@ -8,7 +8,7 @@
 #include "../lib/cJSON.h"
 #include "../rules_notify.h"
 
-#define NOTIFY_TEST_FILE "test_rules.json"
+#define NOTIFY_TEST_FILE "tests/unitest_rules.json"
 
 static void create_test_file(const char* filename) {
     FILE* f = fopen(filename, "w");
@@ -33,7 +33,7 @@ void test_setup_inotify(void) {
 }
 
 void test_setup_inotify_invalid_file(void) {
-    int inotify_fd = setup_inotify("non_existent_file.json");
+    int inotify_fd = setup_inotify("non_existent_dir/rules.json");
     TEST_ASSERT_TRUE(inotify_fd < 0);
 }
 
@@ -53,15 +53,16 @@ void test_write_rules_changes(void) {
 }
 
 void test_moved_rules_changes(void) {
-    int inotify_fd = setup_inotify(".");
+    int inotify_fd = setup_inotify(NOTIFY_TEST_FILE);
     TEST_ASSERT_TRUE(inotify_fd >= 0);
     remove(NOTIFY_TEST_FILE); 
-    const char* temp_source = "/tmp/temp_incoming.json";
+    const char* temp_source = "tests/temp_incoming.json";
     FILE* fd = fopen(temp_source, "w");
     TEST_ASSERT_NOT_NULL(fd);
     fputs("TEST", fd);
     fclose(fd);
     int rename_result = rename(temp_source, NOTIFY_TEST_FILE); // trigger IN_MOVED_TO event
+    if (rename_result != 0) perror("rename");
     struct pollfd pfd = {.fd = inotify_fd, .events = POLLIN};
     int ready = poll(&pfd, 1, 1000);
     TEST_ASSERT_TRUE(rename_result == 0);    
