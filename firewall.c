@@ -7,7 +7,10 @@ struct firewall_bpf *skel;
 
 void handle_signal(int sig) {
     printf("Received signal %d, exiting...\n", sig);
-    cJSON_Delete(rules_json);
+    if (rules_json) {
+        cJSON_Delete(rules_json);
+        rules_json = NULL;
+    }
     bpf_link__destroy(skel->links.xdp_filter);
     firewall_bpf__destroy(skel);
     exit(1);
@@ -105,12 +108,14 @@ int main(int argc, char **argv) {
         cJSON_Delete(rules_json);
         stop();
     }
+    clear_map(ip_map);
     if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), ip_map) != 0) {
         fprintf(stderr, "Failed to populate ip_map from JSON rules\n");
         err = -1;
         cJSON_Delete(rules_json);
         stop();
     }
+    clear_map(port_map);
     if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), port_map) != 0) {
         fprintf(stderr, "Failed to populate port_map from JSON rules\n");
         err = -1;
@@ -135,10 +140,12 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "Failed to set up JSON rules\n");
                 continue; 
             }
+	    clear_map(ip_map);
             if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), ip_map) != 0) {
                 fprintf(stderr, "Failed to populate ip_map from JSON rules\n");
                 continue;
             }
+	    clear_map(port_map);
             if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), port_map) != 0) {
                 fprintf(stderr, "Failed to populate port_map from JSON rules\n");
                 continue;

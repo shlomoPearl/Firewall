@@ -8,5 +8,6 @@
 
 int extract_valid_ip(cJSON* ip, __u32* out_ips);
 int extract_valid_port(cJSON* port, __u16* out_ports);
+int clear_map(struct bpf_map *map);
 int ip_list_2_map(cJSON* ip_list, struct bpf_map *black_map);
 int port_list_2_map(cJSON* port_list, struct bpf_map *black_map);

@@ -28,6 +28,36 @@ int extract_valid_port(cJSON* port, __u16* out_port){
     return -1;
 }
 
+int clear_map(struct bpf_map *map) {
+    int fd = bpf_map__fd(map);
+    if (fd < 0) {
+        fprintf(stderr, "clear_map: invalid map fd\n");
+	return -1;
+    }
+
+    size_t key_size = bpf_map__key_size(map);
+    void *key = malloc(key_size);
+    void *next_key = malloc(key_size);
+    if (!key || !next_key) {
+	fprintf(stderr, "clear_map: allocation failed\n");
+	free(key);
+	free(next_key);
+	return -1;
+    }
+
+    while (bpf_map_get_next_key(fd, NULL, next_key) == 0) {
+	if (bpf_map_delete_elem(fd, next_key) != 0) {
+	    perror("clear_map: bpf map delete element");
+            free(key);
+	    free(next_key);
+	    return -1;
+	}
+    }
+    free(key);
+    free(next_key);
+    return 0;
+}
+
 int ip_list_2_map(cJSON* ip_list, struct bpf_map *black_map) {
     cJSON* ip = NULL;
     cJSON_ArrayForEach(ip, ip_list) {
