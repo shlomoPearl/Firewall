@@ -346,3 +346,7 @@ cleanup
 test_runner
 summary
 trap cleanup EXIT 
+
+if (( test_fail > 0 )); then
+    exit 1
+fi
