@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <libgen.h>
 #include <string.h>
+#include <poll.h>
+#include <errno.h>
 #include "config.h"
 
 int setup_inotify(const char*);

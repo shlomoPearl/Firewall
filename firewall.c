@@ -1,6 +1,5 @@
 #include "firewall.h"
 
-int err;
 cJSON* rules_json;
 struct firewall_bpf *skel;
 
@@ -9,8 +8,6 @@ static volatile sig_atomic_t stop_requested = 0;
 void handle_signal(int sig) {
     printf("Received signal %d, exiting...\n", sig);
     stop_requested = 1;
-    stop(inotify_fd);
-    return 1;
 }
 
 static void stop(int inotify_fd) {
@@ -70,9 +67,7 @@ int main(int argc, char **argv) {
     }
 
     // Load & verify BPF programs 
-    err = firewall_bpf__load(skel);
-    if (err)
-    {
+    if (firewall_bpf__load(skel)) {
         fprintf(stderr, "Failed to load and verify BPF skeleton: %d\n", err);
         stop(inotify_fd);
         return 1;
@@ -95,7 +90,6 @@ int main(int argc, char **argv) {
     if (!ip_map || !port_map)
     {
         fprintf(stderr, "Failed to find ip/port_map\n");
-        err = -1;
         stop(inotify_fd);
         return 1;
     }
@@ -104,21 +98,18 @@ int main(int argc, char **argv) {
     rules_json = setup_json(rules_file);
     if (rules_json == NULL) {
         fprintf(stderr, "Failed to set up JSON rules\n");
-        err = -1;  
         stop(inotify_fd);
         return 1;
     }
     clear_map(ip_map);
     if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), ip_map) != 0) {
         fprintf(stderr, "Failed to populate ip_map from JSON rules\n");
-        err = -1;
         stop(inotify_fd);
         return 1;
     }
     clear_map(port_map);
     if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), port_map) != 0) {
         fprintf(stderr, "Failed to populate port_map from JSON rules\n");
-        err = -1;
         stop(inotify_fd);
         return 1;
     }
@@ -126,32 +117,37 @@ int main(int argc, char **argv) {
     inotify_fd = setup_inotify(rules_file);
     if (inotify_fd < 0) {
         fprintf(stderr, "Failed to set up inotify\n");
-        err = -1;
         stop(inotify_fd);
         return 1;
     }
 
     while (!stop_requested) {
         int reload_needed = watch_rules_changes(inotify_fd);
-        if (reload_needed) {
-            printf("Reloading rules...\n");
-            rules_json = setup_json(rules_file);
-            if (rules_json == NULL) {
-                fprintf(stderr, "Failed to set up JSON rules\n");
-                continue; 
-            }
-	    clear_map(ip_map);
-            if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), ip_map) != 0) {
-                fprintf(stderr, "Failed to populate ip_map from JSON rules\n");
-                continue;
-            }
-	    clear_map(port_map);
-            if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), port_map) != 0) {
-                fprintf(stderr, "Failed to populate port_map from JSON rules\n");
-                continue;
-            }
-            cJSON_Delete(rules_json);
+        if (reload_needed < 0) {
+            fprintf(stderr, "Error while watching rules changes\n");
+            break;
         }
+        if (reload_needed == 1) {
+            continue; 
+        }
+
+        printf("Reloading rules...\n");
+        rules_json = setup_json(rules_file);
+        if (rules_json == NULL) {
+            fprintf(stderr, "Failed to set up JSON rules\n");
+            continue; 
+        }
+    clear_map(ip_map);
+        if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), ip_map) != 0) {
+            fprintf(stderr, "Failed to populate ip_map from JSON rules\n");
+            continue;
+        }
+    clear_map(port_map);
+        if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), port_map) != 0) {
+            fprintf(stderr, "Failed to populate port_map from JSON rules\n");
+            continue;
+        }
+        cJSON_Delete(rules_json);
     }
     stop(inotify_fd);
     return 0;
