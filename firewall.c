@@ -11,7 +11,10 @@ void handle_signal(int sig) {
     stop_requested = 1;
 }
 
-static void stop(){
+static void stop(int inotify_fd) {
+    if (inotify_fd >= 0) {
+        close(inotify_fd);
+    }
     if (skel) {
         firewall_bpf__destroy(skel);
         skel = NULL;
@@ -30,6 +33,7 @@ int main(int argc, char **argv) {
     struct bpf_map *ip_map = NULL;
     struct bpf_map *port_map = NULL;
     int ifindex;
+    int inotify_fd = -1;
 
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <ifname>\n <prod/test>", argv[0]);
@@ -68,7 +72,7 @@ int main(int argc, char **argv) {
     if (err)
     {
         fprintf(stderr, "Failed to load and verify BPF skeleton: %d\n", err);
-        stop();
+        stop(inotify_fd);
     }
 
     // Attach the XDP program to the specified interface 
@@ -76,7 +80,8 @@ int main(int argc, char **argv) {
     if (!skel->links.xdp_filter || libbpf_get_error(skel->links.xdp_filter)) {
         fprintf(stderr, "Failed to attach XDP program");
         skel->links.xdp_filter = NULL;
-        stop();
+        stop(inotify_fd);
+        return 1;
     }
 
     printf("Successfully attached XDP program to interface %s\n", ifname);
@@ -88,38 +93,42 @@ int main(int argc, char **argv) {
     {
         fprintf(stderr, "Failed to find ip/port_map\n");
         err = -1;
-        stop();
+        stop(inotify_fd);
+        return 1;
     }
 
     // first load the rules from the file
     rules_json = setup_json(rules_file);
     if (rules_json == NULL) {
         fprintf(stderr, "Failed to set up JSON rules\n");
-        err = -1;
-        cJSON_Delete(rules_json);
-        stop();
+        err = -1;  
+        stop(inotify_fd);
+        return 1;
     }
     clear_map(ip_map);
     if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), ip_map) != 0) {
         fprintf(stderr, "Failed to populate ip_map from JSON rules\n");
         err = -1;
         cJSON_Delete(rules_json);
-        stop();
+        stop(inotify_fd);
+        return 1;
     }
     clear_map(port_map);
     if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), port_map) != 0) {
         fprintf(stderr, "Failed to populate port_map from JSON rules\n");
         err = -1;
         cJSON_Delete(rules_json);
-        stop();
+        stop(inotify_fd);
+        return 1;
     }
 
-    int inotify_fd = setup_inotify(rules_file);
+    inotify_fd = setup_inotify(rules_file);
     if (inotify_fd < 0) {
         fprintf(stderr, "Failed to set up inotify\n");
         err = -1;
         cJSON_Delete(rules_json);
-        stop();
+        stop(inotify_fd);
+        return 1;
     }
 
     while (!stop_requested) {
@@ -144,6 +153,6 @@ int main(int argc, char **argv) {
             cJSON_Delete(rules_json);
         }
     }
-    stop();
+    stop(inotify_fd);
     return 0;
 }
