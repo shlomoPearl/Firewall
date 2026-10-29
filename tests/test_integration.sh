@@ -342,10 +342,11 @@ summary() {
     echo "AVG FAIL: $(echo "scale=2; $test_fail/$total_test*100" | bc)%"
 }
 
+trap cleanup EXIT 
+
 cleanup
 test_runner
 summary
-trap cleanup EXIT 
 
 if (( test_fail > 0 )); then
     exit 1
