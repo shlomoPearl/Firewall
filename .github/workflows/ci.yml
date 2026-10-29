@@ -25,6 +25,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -32,10 +33,17 @@ jobs:
             build-essential \
             clang \
             llvm \
-            bpftool \
+            linux-tools-common \
             libbpf-dev \
             libelf-dev \
             zlib1g-dev
+
+          if ! command -v bpftool >/dev/null 2>&1; then
+            echo "Error: bpftool executable was not found"
+            exit 1
+          fi
+
+          bpftool version
 
       - name: Show toolchain versions
         run: |
