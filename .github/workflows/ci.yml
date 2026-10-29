@@ -30,6 +30,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            python3-scapy \
             build-essential \
             clang \
             llvm \
@@ -69,6 +70,6 @@ jobs:
 
       - name: Run XDP filter tests
         run: make run_xdp_test
-        
+
       - name: Run integration tests
         run: make run_integration_test
