@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
 
     // Load & verify BPF programs 
     if (firewall_bpf__load(skel)) {
-        fprintf(stderr, "Failed to load and verify BPF skeleton: %d\n", err);
+        fprintf(stderr, "Failed to load and verify BPF skeleton\n");
         stop(inotify_fd);
         return 1;
     }
