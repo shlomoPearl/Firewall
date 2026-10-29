@@ -73,6 +73,7 @@ int main(int argc, char **argv) {
     {
         fprintf(stderr, "Failed to load and verify BPF skeleton: %d\n", err);
         stop(inotify_fd);
+        return 1;
     }
 
     // Attach the XDP program to the specified interface 
@@ -109,7 +110,6 @@ int main(int argc, char **argv) {
     if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), ip_map) != 0) {
         fprintf(stderr, "Failed to populate ip_map from JSON rules\n");
         err = -1;
-        cJSON_Delete(rules_json);
         stop(inotify_fd);
         return 1;
     }
@@ -117,7 +117,6 @@ int main(int argc, char **argv) {
     if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), port_map) != 0) {
         fprintf(stderr, "Failed to populate port_map from JSON rules\n");
         err = -1;
-        cJSON_Delete(rules_json);
         stop(inotify_fd);
         return 1;
     }
@@ -126,7 +125,6 @@ int main(int argc, char **argv) {
     if (inotify_fd < 0) {
         fprintf(stderr, "Failed to set up inotify\n");
         err = -1;
-        cJSON_Delete(rules_json);
         stop(inotify_fd);
         return 1;
     }
