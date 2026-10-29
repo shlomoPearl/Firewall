@@ -9,6 +9,8 @@ static volatile sig_atomic_t stop_requested = 0;
 void handle_signal(int sig) {
     printf("Received signal %d, exiting...\n", sig);
     stop_requested = 1;
+    stop(inotify_fd);
+    return 1;
 }
 
 static void stop(int inotify_fd) {
