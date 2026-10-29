@@ -37,12 +37,13 @@ cleanup() {
 }
 
 start_firewall() {
-    sudo ./firewall veth-host test &
+    ./firewall veth-host test &
     FIREWALL_PID=$!
 }
 
 stop_firewall() {
-    sudo kill -"$1" "$FIREWALL_PID" 
+    kill -s "$1" "$FIREWALL_PID" 
+    wait "$FIREWALL_PID" 2>/dev/null
 }
 
 test_attach() {
@@ -183,7 +184,7 @@ check_drop_malformed() {
     TCPDUMP_PID_HOST=$!
 
     sleep 0.5
-    sudo python3 tests/malformed_packet.py "$HOST_MAC" "$1" &
+    sudo python3 tests/malformed_packet.py "$HOST_MAC" "$1" 
     generator_status=$?
     sleep 0.5
 
@@ -195,7 +196,7 @@ check_drop_malformed() {
         return 1
     fi
 
-    count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
+    count_received=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
     count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
     > sent.pcap
     > received.pcap
