@@ -1,26 +1,26 @@
 #include "firewall.h"
 
-int running = 1;
 int err;
 cJSON* rules_json;
 struct firewall_bpf *skel;
 
+static volatile sig_atomic_t stop_requested = 0;
+
 void handle_signal(int sig) {
     printf("Received signal %d, exiting...\n", sig);
+    stop_requested = 1;
+}
+
+static void stop(){
+    if (skel) {
+        firewall_bpf__destroy(skel);
+        skel = NULL;
+    }
+
     if (rules_json) {
         cJSON_Delete(rules_json);
         rules_json = NULL;
     }
-    bpf_link__destroy(skel->links.xdp_filter);
-    firewall_bpf__destroy(skel);
-    exit(1);
-}
-
-void stop(){
-    printf("EXIT...\n");
-    bpf_link__destroy(skel->links.xdp_filter);
-    firewall_bpf__destroy(skel);
-    exit(1);
 }
 
 
@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    /* Load & verify BPF programs */
+    // Load & verify BPF programs 
     err = firewall_bpf__load(skel);
     if (err)
     {
@@ -71,20 +71,11 @@ int main(int argc, char **argv) {
         stop();
     }
 
-    /* Attach XDP program */
-    err = firewall_bpf__attach(skel);
-    if (err)
-    {
-        fprintf(stderr, "Failed to attach BPF skeleton: %d\n", err);
-        stop();
-    }
-
-    /* Attach the XDP program to the specified interface */
+    // Attach the XDP program to the specified interface 
     skel->links.xdp_filter = bpf_program__attach_xdp(skel->progs.xdp_filter, ifindex);
-    if (!skel->links.xdp_filter)
-    {
-        err = -errno;
-        fprintf(stderr, "Failed to attach XDP program: %s\n", strerror(errno));
+    if (!skel->links.xdp_filter || libbpf_get_error(skel->links.xdp_filter)) {
+        fprintf(stderr, "Failed to attach XDP program");
+        skel->links.xdp_filter = NULL;
         stop();
     }
 
@@ -131,7 +122,7 @@ int main(int argc, char **argv) {
         stop();
     }
 
-    while (running) {
+    while (!stop_requested) {
         int reload_needed = watch_rules_changes(inotify_fd);
         if (reload_needed) {
             printf("Reloading rules...\n");
@@ -153,4 +144,6 @@ int main(int argc, char **argv) {
             cJSON_Delete(rules_json);
         }
     }
+    stop();
+    return 0;
 }
