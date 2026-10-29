@@ -182,22 +182,31 @@ check_drop_malformed() {
     sudo tcpdump -i veth-host -n -w received.pcap > /dev/null 2>&1 & 
     TCPDUMP_PID_HOST=$!
 
-    sudo python3 tests/malformed_packet.py "$HOST_MAC" "$1" &
     sleep 0.5
-    count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
-    count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
-    success=0
-    if [[ "$count_recived" -ne 0 && "$count_sent" -le 0 ]]; then
-        echo "Malformed packet$1 error - not droped or not send"
-        success=1
-    else
-        echo "Malformed packet$1 droped from veth-host as expected"
-    fi
+    sudo python3 tests/malformed_packet.py "$HOST_MAC" "$1" &
+    generator_status=$?
+    sleep 0.5
+
     sudo kill "$TCPDUMP_PID_HOST" "$TCPDUMP_PID_NS" 2>/dev/null
     wait "$TCPDUMP_PID_HOST" "$TCPDUMP_PID_NS" 2>/dev/null
+
+    if [[ "$generator_status" -ne 0 ]]; then
+        echo "Malformed packet $1: packet generator failed"
+        return 1
+    fi
+
+    count_recived=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
+    count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
     > sent.pcap
     > received.pcap
-    return "$success"
+
+    if [[ "$count_sent" -gt 0 && "$count_received" -eq 0 ]]; then
+        echo "Malformed packet $1 dropped as expected"
+        return 0
+    else
+        echo "Malformed packet $1: expected a sent packet and no received packet"
+        return 1
+    fi
 }
 
 test_drop_malformed() {
