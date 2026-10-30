@@ -184,7 +184,7 @@ check_drop_malformed() {
     TCPDUMP_PID_HOST=$!
 
     sleep 0.5
-    sudo python3 tests/malformed_packet.py "$HOST_MAC" "$1" 
+    sudo ip netns exec fw-test python3 tests/malformed_packet.py "$HOST_MAC" "$1" 
     generator_status=$?
     sleep 0.5
 
@@ -200,7 +200,7 @@ check_drop_malformed() {
     count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
     > sent.pcap
     > received.pcap
-
+    echo "DEBUG malformed $1: sent=$count_sent, received=$count_received"
     if [[ "$count_sent" -gt 0 && "$count_received" -eq 0 ]]; then
         echo "Malformed packet $1 dropped as expected"
         return 0
@@ -210,23 +210,46 @@ check_drop_malformed() {
     fi
 }
 
-test_drop_malformed() {
-    # test 7: malformed packet
-    success=0
-    check_drop_malformed 1
-    ((success += "$?"))
-    check_drop_malformed 2
-    ((success += "$?"))
-    check_drop_malformed 4
-    ((success += "$?"))
-    check_drop_malformed 5
-    ((success += "$?"))
-    check_drop_malformed 6
-    ((success += "$?"))
-    check_drop_malformed 7
-    ((success += "$?"))
-    return "$success"
+mac() { printf '02:de:ad:be:ef:%02x' "$1"; }
+
+wait_ready() {   # tcpdump prints "listening on" to stderr once it is capturing
+    for _ in $(seq 1 50); do grep -q "listening on" "$1" && return 0; sleep 0.1; done
+    return 1
 }
+
+count() {        # packets in a pcap from a given source MAC
+    tcpdump -r "$1" -n "ether src $2" 2>/dev/null | wc -l
+}
+
+test_drop_malformed() {
+    local fails=0
+    local host_mac; host_mac=$(cat /sys/class/net/veth-host/address)
+
+    ip netns exec fw-test tcpdump -i veth-ns -n -U -w sent.pcap 2>/dev/null &
+    local pid_ns=$!
+    tcpdump -i veth-host -n -U -w received.pcap 2>/dev/null &
+    local pid_host=$!
+
+    ip netns exec fw-test python3 tests/malformed_packet.py "$host_mac" "$ALLOWED_IP" "$ALLOWED_PORT" || { kill "$pid_ns" "$pid_host"; return 1; }
+    sleep 0.5    # settling time; the only fixed wait left, since proving a negative can't be polled
+    kill "$pid_ns" "$pid_host"; wait "$pid_ns" "$pid_host" 2>/dev/null
+
+    # harness self-check: the well-formed control must have been sent AND received
+    if [ "$(count sent.pcap "$(mac 0)")" -ne 1 ] || [ "$(count received.pcap "$(mac 0)")" -ne 1 ]; then
+        echo "Harness check failed: control packet did not arrive"; return 1
+    fi
+
+    for c in 2 4 5 6 7; do
+        s=$(count sent.pcap "$(mac $c)"); r=$(count received.pcap "$(mac $c)")
+        if [ "$s" -eq 1 ] && [ "$r" -eq 0 ]; then
+            echo "Malformed case $c dropped as expected"
+        else
+            echo "Malformed case $c FAIL (sent=$s received=$r)"; ((fails++))
+        fi
+    done
+    return "$fails"
+}
+
 
 check_pass() {
     if [ "$1" -ne 0 ]; then

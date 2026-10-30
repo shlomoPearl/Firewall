@@ -131,23 +131,25 @@ int main(int argc, char **argv) {
             continue; 
         }
 
-        printf("Reloading rules...\n");
-        rules_json = setup_json(rules_file);
-        if (rules_json == NULL) {
+        cJSON *new_rules = setup_json(rules_file);
+        if (new_rules == NULL) {
             fprintf(stderr, "Failed to set up JSON rules\n");
             continue; 
         }
-    clear_map(ip_map);
-        if (ip_list_2_map(get_blacklist(rules_json, IP_LST_N), ip_map) != 0) {
-            fprintf(stderr, "Failed to populate ip_map from JSON rules\n");
+        clear_map(ip_map);
+        if (ip_list_2_map(get_blacklist(new_rules, IP_LST_N), ip_map) != 0) {
+            fprintf(stderr, "Failed to populate ip_map\n");
+   	    cJSON_Delete(new_rules);
             continue;
         }
-    clear_map(port_map);
-        if (port_list_2_map(get_blacklist(rules_json, PORT_LST_N), port_map) != 0) {
-            fprintf(stderr, "Failed to populate port_map from JSON rules\n");
+        clear_map(port_map);
+        if (port_list_2_map(get_blacklist(new_rules, PORT_LST_N), port_map) != 0) {
+            fprintf(stderr, "Failed to populate port_map\n");
+	    cJSON_Delete(new_rules);
             continue;
         }
         cJSON_Delete(rules_json);
+	rules_json = new_rules;
     }
     stop(inotify_fd);
     return 0;
