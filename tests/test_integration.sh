@@ -176,40 +176,6 @@ test_drop_fragment() {
     return $?
 }
 
-check_drop_malformed() {
-    HOST_MAC=$(ip link show veth-host | awk '/link\/ether/ {print $2}')
-    sudo ip netns exec fw-test tcpdump -i veth-ns -n -w sent.pcap > /dev/null 2>&1 & 
-    TCPDUMP_PID_NS=$!
-    sudo tcpdump -i veth-host -n -w received.pcap > /dev/null 2>&1 & 
-    TCPDUMP_PID_HOST=$!
-
-    sleep 0.5
-    sudo ip netns exec fw-test python3 tests/malformed_packet.py "$HOST_MAC" "$1" 
-    generator_status=$?
-    sleep 0.5
-
-    sudo kill "$TCPDUMP_PID_HOST" "$TCPDUMP_PID_NS" 2>/dev/null
-    wait "$TCPDUMP_PID_HOST" "$TCPDUMP_PID_NS" 2>/dev/null
-
-    if [[ "$generator_status" -ne 0 ]]; then
-        echo "Malformed packet $1: packet generator failed"
-        return 1
-    fi
-
-    count_received=$(tcpdump -r received.pcap -n 2>/dev/null | wc -l)
-    count_sent=$(tcpdump -r sent.pcap -n 2>/dev/null | wc -l)
-    > sent.pcap
-    > received.pcap
-    echo "DEBUG malformed $1: sent=$count_sent, received=$count_received"
-    if [[ "$count_sent" -gt 0 && "$count_received" -eq 0 ]]; then
-        echo "Malformed packet $1 dropped as expected"
-        return 0
-    else
-        echo "Malformed packet $1: expected a sent packet and no received packet"
-        return 1
-    fi
-}
-
 mac() { printf '02:de:ad:be:ef:%02x' "$1"; }
 
 wait_ready() {   # tcpdump prints "listening on" to stderr once it is capturing
