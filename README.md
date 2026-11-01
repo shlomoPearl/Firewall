@@ -1,4 +1,5 @@
 # XDP Firewall
+[![XDP Firewall CI](https://github.com/shlomoPearl/Firewall/actions/workflows/ci.yml/badge.svg)](https://github.com/shlomoPearl/Firewall/actions/workflows/ci.yml)  
 
 A kernel-level packet filter for Linux built with **eBPF and XDP**. Rules are enforced in-kernel at the network driver layer — before the kernel builds a socket buffer for the packet — and are hot-reloaded from a JSON rules file with no restart required.
 
@@ -67,7 +68,6 @@ This project is validated across three distinct layers, each catching a differen
 ## Known limitations
 
 - **No connection state tracking.** Every packet is evaluated independently — there's no notion of an established connection, so this doesn't distinguish return traffic on an allowed connection from unsolicited traffic. This is the natural next step (see Future work).
-- **IPv4 only.** IPv6 traffic is currently passed through unfiltered.
 - **Blacklist, not allowlist.** Default-allow with explicit blocks is simpler to reason about for a portfolio project, but is the less secure default posture compared to default-deny.
 - **No CIDR range support.** Rules match individual IPs; blocking a subnet requires listing every address in it.
 
@@ -75,5 +75,4 @@ This project is validated across three distinct layers, each catching a differen
 
 - Connection-state tracking (stateful filtering)
 - CIDR range and rule-priority support
-- IPv6 support
 - Packet/drop counters exposed via a BPF map for basic observability
