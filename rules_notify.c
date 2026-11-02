@@ -37,7 +37,6 @@ int watch_rules_changes(int inotify_fd) {
         if (errno == EINTR) {
             return 0;  // Interrupted by a signal
         }
-
         perror("poll");
         return -1;
     }
@@ -50,7 +49,7 @@ int watch_rules_changes(int inotify_fd) {
         return 0;
     }
     ssize_t length = read(inotify_fd, buffer, sizeof(buffer));
-     if (length < 0) {
+    if (length < 0) {
         if (errno == EINTR || errno == EAGAIN) {
             return 0;
         }
@@ -64,14 +63,14 @@ int watch_rules_changes(int inotify_fd) {
         struct inotify_event* event = (struct inotify_event*)(buffer + i);
         if (event->len > 0 && strcmp(event->name, g_watched_name) == 0){
             if (event->mask & IN_CLOSE_WRITE) {
-                    printf("Rules file changed - IN_CLOSE_WRITE, reloading...\n");
-                    return 1; 
-                }
+                printf("Rules file changed - IN_CLOSE_WRITE, reloading...\n");
+                return 1; 
+            }
             if (event->mask & IN_MOVED_TO) {
                 printf("Rules file moved to - IN_MOVED_TO, reloading...\n");
                 return 1; 
             }
-	}
+        }
         i += sizeof(struct inotify_event) + event->len;
     }
     return 0; 
