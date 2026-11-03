@@ -197,14 +197,13 @@ test_drop_malformed() {
     local pid_host=$!
 
     ip netns exec fw-test python3 tests/malformed_packet.py "$host_mac" "$ALLOWED_IP" "$ALLOWED_PORT" || { kill "$pid_ns" "$pid_host"; return 1; }
-    sleep 0.5    # settling time; the only fixed wait left, since proving a negative can't be polled
+    sleep 0.5
     kill "$pid_ns" "$pid_host"; wait "$pid_ns" "$pid_host" 2>/dev/null
 
-    # harness self-check: the well-formed control must have been sent AND received
+    # harness self-check: ensure the control packet was sent and received
     if [ "$(count sent.pcap "$(mac 0)")" -ne 1 ] || [ "$(count received.pcap "$(mac 0)")" -ne 1 ]; then
         echo "Harness check failed: control packet did not arrive"; return 1
     fi
-
     for c in 2 4 5 6 7; do
         s=$(count sent.pcap "$(mac $c)"); r=$(count received.pcap "$(mac $c)")
         if [ "$s" -eq 1 ] && [ "$r" -eq 0 ]; then
@@ -215,7 +214,6 @@ test_drop_malformed() {
     done
     return "$fails"
 }
-
 
 check_pass() {
     if [ "$1" -ne 0 ]; then
